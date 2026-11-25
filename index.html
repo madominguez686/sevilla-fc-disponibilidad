@@ -495,4 +495,279 @@
       { ficha: "161", nombre: "Marta Alfonso Compán", zona: "Gol Sur", rol: "empleado", email: "marta.alfonso@prueba.local" },
       { ficha: "166", nombre: "Marta Espinosa Gil", zona: "Preferencia", rol: "empleado", email: "marta.espinosa@prueba.local" },
       { ficha: "201", nombre: "Paula Baena Morales", zona: "Fondo", rol: "empleado", email: "paula.baena@prueba.local" },
-      { ficha: "204", nombre: "Paula Maqueda Romero", zona: "Gol Norte",
+      { ficha: "204", nombre: "Paula Maqueda Romero", zona: "Gol Norte", rol: "empleado", email: "paula.maqueda@prueba.local" },
+      { ficha: "208", nombre: "Rocío Limón Ortega", zona: "Gol Sur", rol: "empleado", email: "rocio.limon@prueba.local" },
+      { ficha: "010", nombre: "Mario Lobón", zona: "Preferencia", rol: "encargado", email: "mario.lobon@prueba.local" }
+    ];
+
+    const MARGINS = ["2 horas", "3 horas", "4 horas", "5 horas", "6 horas"];
+
+    let state = {
+      confirmado: false,
+      altoRiesgo: false,
+      horaInicio: "21:00",
+      currentUser: null,
+      draftAvailable: null,
+      draftMargin: "5 horas",
+      availabilities: {}
+    };
+
+    let sbClient = null;
+
+    function init() {
+      const sel = document.getElementById("simUserSelect");
+      STAFF.forEach((u) => {
+        const opt = document.createElement("option");
+        opt.value = u.ficha;
+        opt.textContent = `${u.nombre} (Ficha ${u.ficha}) · ${u.rol === "encargado" ? "Encargado" : u.zona}`;
+        sel.appendChild(opt);
+      });
+
+      const mWrap = document.getElementById("marginButtons");
+      MARGINS.forEach((m) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "margin-btn";
+        btn.textContent = m;
+        btn.onclick = () => {
+          state.draftMargin = m;
+          renderMargins();
+        };
+        mWrap.appendChild(btn);
+      });
+
+      renderMatchDoors();
+      checkSupabaseSession();
+    }
+
+    function computeDoors() {
+      const [hh, mm] = state.horaInicio.split(":").map(Number);
+      const startMin = hh * 60 + mm;
+      const vipMin = startMin - 90;
+      const genOffset = state.altoRiesgo ? 90 : 60;
+      const genMin = startMin - genOffset;
+
+      const fmt = (mins) => {
+        const wrapped = ((mins % 1440) + 1440) % 1440;
+        return `${String(Math.floor(wrapped / 60)).padStart(2, "0")}:${String(wrapped % 60).padStart(2, "0")}`;
+      };
+
+      return {
+        start: fmt(startMin),
+        vip: fmt(vipMin),
+        gen: fmt(genMin),
+        genLabel: state.altoRiesgo ? "General (-1h30)" : "General (-1h)"
+      };
+    }
+
+    function renderMatchDoors() {
+      const d = computeDoors();
+      document.getElementById("doorStart").textContent = d.start;
+      document.getElementById("doorVip").textContent = d.vip;
+      document.getElementById("doorGen").textContent = d.gen;
+      document.getElementById("genLabel").textContent = d.genLabel;
+
+      const badge = document.getElementById("confirmBadge");
+      if (state.confirmado) {
+        badge.textContent = "Horario confirmado";
+        badge.className = "badge badge-confirmado";
+      } else {
+        badge.textContent = "Hora estimada";
+        badge.className = "badge badge-estimado";
+      }
+    }
+
+    function showBanner(id, msg, type = "ok") {
+      const el = document.getElementById(id);
+      el.textContent = msg;
+      el.className = `status-banner show ${type}`;
+    }
+
+    function connectSupabase() {
+      const url = document.getElementById("sbUrl").value.trim();
+      const key = document.getElementById("sbKey").value.trim();
+      if (!url || !key) {
+        showBanner("sbConnMsg", "Introduce Project URL y Anon Public Key.", "warn");
+        return;
+      }
+      sbClient = window.supabase.createClient(url, key);
+      showBanner("sbConnMsg", "Cliente Supabase inicializado.", "ok");
+    }
+
+    async function checkSupabaseSession() {
+      if (!sbClient) return;
+      const { data } = await sbClient.auth.getSession();
+      if (data?.session?.user?.email) {
+        const email = data.session.user.email.toLowerCase();
+        const found = STAFF.find((u) => u.email.toLowerCase() === email);
+        if (found) {
+          openAppForUser(found);
+        }
+      }
+    }
+
+    async function sendMagicLink() {
+      const email = document.getElementById("loginEmail").value.trim().toLowerCase();
+      if (!email) {
+        showBanner("loginMsg", "Escribe tu correo electrónico.", "warn");
+        return;
+      }
+      if (!sbClient) {
+        showBanner("loginMsg", "Conecta primero Supabase arriba o usa la prueba rápida local.", "warn");
+        return;
+      }
+      const { error } = await sbClient.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: window.location.href }
+      });
+      if (error) {
+        showBanner("loginMsg", `Error al enviar enlace: ${error.message}`, "err");
+      } else {
+        showBanner("loginMsg", `Enlace enviado a ${email}. Ábrelo desde tu correo para entrar en tu ficha.`, "ok");
+      }
+    }
+
+    function loginSimulated() {
+      const ficha = document.getElementById("simUserSelect").value;
+      const user = STAFF.find((u) => u.ficha === ficha);
+      if (!user) return;
+      openAppForUser(user);
+    }
+
+    function openAppForUser(user) {
+      state.currentUser = user;
+      document.getElementById("loginCard").classList.add("hidden");
+      document.getElementById("mainApp").classList.remove("hidden");
+
+      document.getElementById("sessionUserTitle").textContent = user.nombre;
+      document.getElementById("sessionUserMeta").textContent = `Ficha #${user.ficha} · ${user.zona} · ${user.rol === "encargado" ? "Encargado" : "Empleado"}`;
+
+      const roleTabs = document.getElementById("roleTabs");
+      if (user.rol === "encargado" || user.rol === "admin") {
+        roleTabs.classList.remove("hidden");
+      } else {
+        roleTabs.classList.add("hidden");
+      }
+
+      loadEmployeeFicha(user);
+      renderEncargadoList();
+      switchTab("emp");
+    }
+
+    function logoutUser() {
+      state.currentUser = null;
+      if (sbClient) sbClient.auth.signOut().catch(() => {});
+      document.getElementById("mainApp").classList.add("hidden");
+      document.getElementById("loginCard").classList.remove("hidden");
+    }
+
+    function switchTab(tab) {
+      const isEmp = tab === "emp";
+      document.getElementById("tabEmp").classList.toggle("active", isEmp);
+      document.getElementById("tabEnc").classList.toggle("active", !isEmp);
+      document.getElementById("viewEmp").classList.toggle("hidden", !isEmp);
+      document.getElementById("viewEnc").classList.toggle("hidden", isEmp);
+      if (!isEmp) renderEncargadoList();
+    }
+
+    function loadEmployeeFicha(user) {
+      document.getElementById("empName").textContent = user.nombre;
+      document.getElementById("empZoneRole").textContent = `${user.zona} · Solo puedes editar tu propia ficha`;
+      document.getElementById("empFichaBadge").textContent = `Ficha #${user.ficha}`;
+      document.getElementById("empMsg").className = "status-banner";
+
+      const prev = state.availabilities[user.ficha];
+      state.draftAvailable = prev ? prev.disponible : null;
+      state.draftMargin = prev && prev.margen ? prev.margen : "5 horas";
+
+      renderChoiceButtons();
+      renderMargins();
+    }
+
+    function setAvailable(val) {
+      state.draftAvailable = val;
+      renderChoiceButtons();
+    }
+
+    function renderChoiceButtons() {
+      const yes = document.getElementById("btnYes");
+      const no = document.getElementById("btnNo");
+      const marginSec = document.getElementById("marginSection");
+
+      yes.className = "choice-btn" + (state.draftAvailable === true ? " active-yes" : "");
+      no.className = "choice-btn" + (state.draftAvailable === false ? " active-no" : "");
+      marginSec.style.display = state.draftAvailable === false ? "none" : "block";
+    }
+
+    function renderMargins() {
+      const btns = document.querySelectorAll(".margin-btn");
+      btns.forEach((b) => {
+        b.classList.toggle("active", b.textContent === state.draftMargin);
+      });
+    }
+
+    async function saveMyAvailability() {
+      const user = state.currentUser;
+      if (!user) return;
+      if (state.draftAvailable === null) {
+        showBanner("empMsg", "Selecciona si estás disponible o no disponible.", "warn");
+        return;
+      }
+
+      const payload = {
+        ficha: user.ficha,
+        nombre: user.nombre,
+        zona: user.zona,
+        disponible: state.draftAvailable,
+        margen: state.draftAvailable ? state.draftMargin : "No disponible",
+        actualizado: new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })
+      };
+
+      state.availabilities[user.ficha] = payload;
+
+      if (sbClient) {
+        const { error } = await sbClient
+          .from("convocatorias")
+          .upsert({
+            partido_id: "LFP27.15",
+            disponible: payload.disponible,
+            margen_horas: payload.margen
+          }, { onConflict: "partido_id,empleado_id" });
+
+        if (error) {
+          showBanner("empMsg", `Guardado local; Supabase devolvió: ${error.message}`, "warn");
+          renderEncargadoList();
+          return;
+        }
+      }
+
+      showBanner("empMsg", `Tu ficha (#${user.ficha}) se ha guardado como ${payload.disponible ? "DISPONIBLE (" + payload.margen + ")" : "NO DISPONIBLE"}.`, "ok");
+      renderEncargadoList();
+    }
+
+    function renderEncargadoList() {
+      const listEl = document.getElementById("encList");
+      const items = Object.values(state.availabilities);
+      const okCount = items.filter((i) => i.disponible).length;
+      document.getElementById("encCount").textContent = `${okCount} disponibles`;
+
+      if (!items.length) {
+        listEl.innerHTML = `<div style="font-size:13px;color:var(--muted);padding:10px 0;">Aún no hay respuestas guardadas para LFP27.15.</div>`;
+        return;
+      }
+
+      listEl.innerHTML = items.map((it) => `
+        <div class="person-item">
+          <div>
+            <strong>${it.nombre}</strong> <span style="color:var(--muted);font-size:12px;">(#${it.ficha} · ${it.zona})</span>
+            <div style="font-size:12px;color:var(--muted);">Margen: ${it.margen} · ${it.actualizado}</div>
+          </div>
+          <span class="pill-mini ${it.disponible ? "pill-ok" : "pill-no"}">${it.disponible ? "Disponible" : "No disp."}</span>
+        </div>
+      `).join("");
+    }
+
+    init();
+  </script>
+</body>
+</html>
