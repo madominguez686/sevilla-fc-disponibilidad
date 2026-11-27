@@ -177,6 +177,36 @@
       margin-top: 2px;
     }
 
+    .schedule-override-panel {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1.5px solid #d1d5db;
+      background: #f9fafb;
+    }
+
+    .schedule-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    @media (max-width: 640px) {
+      .schedule-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .schedule-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
     .tabs {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -837,12 +867,12 @@
         </div>
         <div class="doors-grid">
           <div class="door-pill">
-            <span>Inicio</span>
-            <strong id="doorStart">21:00</strong>
+            <span>Apertura puertas</span>
+            <strong id="doorOpen">20:00</strong>
           </div>
           <div class="door-pill">
-            <span id="doorOpenLabel">Apertura puertas</span>
-            <strong id="doorOpen">20:00</strong>
+            <span>Inicio</span>
+            <strong id="doorStart">21:00</strong>
           </div>
           <div class="door-pill">
             <span>Descanso</span>
@@ -981,7 +1011,48 @@
                   Orden: Almacén · Bajas · Entreplantas · Altas. Indica encargados y camareros por puesto.
                 </p>
               </div>
-              <span id="encZoneBadge" class="pill-mini">Zona</span>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <button id="toggleScheduleEditorBtn" class="mini-toggle-btn" type="button" onclick="toggleScheduleEditor()">Ajustar horas</button>
+                <span id="encZoneBadge" class="pill-mini">Zona</span>
+              </div>
+            </div>
+
+            <div id="scheduleOverridePanel" class="schedule-override-panel hidden">
+              <div style="font-size: 12px; font-weight: 800; color: var(--text);">
+                Ajuste puntual de horas del partido (excepción sobre configuración base)
+              </div>
+              <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">
+                Por defecto se calculan desde el partido (normal: -1h apertura / alto riesgo: -1h30 apertura, +45m descanso, +1h45m fin). Cambia aquí solo si hay excepción.
+              </div>
+
+              <div class="schedule-grid">
+                <div>
+                  <label for="editOpenSelect">Apertura puertas</label>
+                  <select id="editOpenSelect" onchange="onScheduleFieldChange('open', this.value)"></select>
+                </div>
+                <div>
+                  <label for="editStartSelect">Inicio partido</label>
+                  <select id="editStartSelect" onchange="onScheduleFieldChange('start', this.value)"></select>
+                </div>
+                <div>
+                  <label for="editHalftimeSelect">Descanso</label>
+                  <select id="editHalftimeSelect" onchange="onScheduleFieldChange('halftime', this.value)"></select>
+                </div>
+                <div>
+                  <label for="editEndSelect">Finalización</label>
+                  <select id="editEndSelect" onchange="onScheduleFieldChange('end', this.value)"></select>
+                </div>
+              </div>
+
+              <div class="schedule-actions">
+                <label style="display: inline-flex; align-items: center; gap: 7px; margin: 0; cursor: pointer; font-size: 12px; font-weight: 800;">
+                  <input id="highRiskCheckbox" type="checkbox" style="width: 16px; height: 16px; cursor: pointer;"
+                    onchange="toggleHighRiskMode(this.checked)" />
+                  <span>Partido de alto riesgo</span>
+                </label>
+
+                <button class="mini-toggle-btn" type="button" onclick="resetScheduleToDefault()">Restablecer partido</button>
+              </div>
             </div>
 
             <div id="visibilityControlBar" class="visibility-bar is-hidden">
@@ -1047,7 +1118,8 @@
       partido: "Sevilla FC - Málaga CF",
       fechaTexto: "Lunes, 7 de diciembre de 2026 · 21:00",
       horaInicio: "21:00",
-      aperturaOffsetMins: -60,
+      aperturaNormalOffsetMins: -60,
+      aperturaAltoRiesgoOffsetMins: -90,
       descansoOffsetMins: 45,
       finalizacionOffsetMins: 105,
       confirmado: false,
@@ -1142,10 +1214,10 @@
       return hh * 60 + mm;
     }
 
-    function addHoursToHHMM(hhmm, hoursToAdd = 2) {
+    function addMinutesToHHMM(hhmm, offsetMins) {
       const clean = normalizeHHMM(hhmm, "21:00");
       const [hh, mm] = clean.split(":").map(Number);
-      const totalMins = (hh * 60 + mm + hoursToAdd * 60) % 1440;
+      const totalMins = ((hh * 60 + mm + offsetMins) % 1440 + 1440) % 1440;
       const outH = String(Math.floor(totalMins / 60)).padStart(2, "0");
       const outM = String(totalMins % 60).padStart(2, "0");
       return `${outH}:${outM}`;
@@ -1225,10 +1297,25 @@
 
     const LOCAL_VISIBILITY_KEY = `sfc_conv_visible_${MATCH_INFO.codigo}`;
 
+    function buildDefaultSchedule(startHHMM, altoRiesgo) {
+      const start = normalizeHHMM(startHHMM, "21:00");
+      const openOffset = altoRiesgo
+        ? (MATCH_INFO.aperturaAltoRiesgoOffsetMins ?? -90)
+        : (MATCH_INFO.aperturaNormalOffsetMins ?? -60);
+      return {
+        open: addMinutesToHHMM(start, openOffset),
+        start,
+        halftime: addMinutesToHHMM(start, MATCH_INFO.descansoOffsetMins ?? 45),
+        end: addMinutesToHHMM(start, MATCH_INFO.finalizacionOffsetMins ?? 105)
+      };
+    }
+
     let state = {
       confirmado: MATCH_INFO.confirmado,
       altoRiesgo: MATCH_INFO.altoRiesgo,
       horaInicio: MATCH_INFO.horaInicio,
+      schedule: buildDefaultSchedule(MATCH_INFO.horaInicio, MATCH_INFO.altoRiesgo),
+      scheduleEditorOpen: false,
       currentUser: null,
       draftAvailable: null,
       draftScope: "total",
@@ -1279,9 +1366,25 @@
       sel.value = state.draftSinceHour;
     }
 
+    function populateScheduleSelects() {
+      const optionsHtml = TIME_SLOTS.map((t) => `<option value="${t}">${t}</option>`).join("");
+      const openSel = document.getElementById("editOpenSelect");
+      const startSel = document.getElementById("editStartSelect");
+      const halfSel = document.getElementById("editHalftimeSelect");
+      const endSel = document.getElementById("editEndSelect");
+      const hrChk = document.getElementById("highRiskCheckbox");
+
+      if (openSel) { openSel.innerHTML = optionsHtml; openSel.value = state.schedule.open; }
+      if (startSel) { startSel.innerHTML = optionsHtml; startSel.value = state.schedule.start; }
+      if (halfSel) { halfSel.innerHTML = optionsHtml; halfSel.value = state.schedule.halftime; }
+      if (endSel) { endSel.innerHTML = optionsHtml; endSel.value = state.schedule.end; }
+      if (hrChk) { hrChk.checked = Boolean(state.altoRiesgo); }
+    }
+
     function init() {
       applyMatchHeaderTexts();
       populateSinceHourSelect();
+      populateScheduleSelects();
 
       document.getElementById("loginPassword").addEventListener("keydown", (e) => {
         if (e.key === "Enter") loginWithPassword();
@@ -1291,32 +1394,13 @@
       checkSupabaseSession();
     }
 
-    function computeMatchSchedule() {
-      const [hh, mm] = normalizeHHMM(state.horaInicio, "21:00").split(":").map(Number);
-      const startMin = hh * 60 + mm;
-      const openOffset = state.altoRiesgo ? -90 : (MATCH_INFO.aperturaOffsetMins ?? -60);
-      const halftimeOffset = MATCH_INFO.descansoOffsetMins ?? 45;
-      const endOffset = MATCH_INFO.finalizacionOffsetMins ?? 105;
-
-      const fmt = (mins) => {
-        const wrapped = ((mins % 1440) + 1440) % 1440;
-        return `${String(Math.floor(wrapped / 60)).padStart(2, "0")}:${String(wrapped % 60).padStart(2, "0")}`;
-      };
-
-      return {
-        start: fmt(startMin),
-        open: fmt(startMin + openOffset),
-        halftime: fmt(startMin + halftimeOffset),
-        end: fmt(startMin + endOffset)
-      };
-    }
-
     function renderMatchDoors() {
-      const s = computeMatchSchedule();
-      document.getElementById("doorStart").textContent = s.start;
-      document.getElementById("doorOpen").textContent = s.open;
-      document.getElementById("doorHalftime").textContent = s.halftime;
-      document.getElementById("doorEnd").textContent = s.end;
+      document.getElementById("doorOpen").textContent = state.schedule.open;
+      document.getElementById("doorStart").textContent = state.schedule.start;
+      document.getElementById("doorHalftime").textContent = state.schedule.halftime;
+      document.getElementById("doorEnd").textContent = state.schedule.end;
+
+      populateScheduleSelects();
 
       const badge = document.getElementById("confirmBadge");
       if (state.confirmado) {
@@ -1326,6 +1410,56 @@
         badge.textContent = "Hora estimada";
         badge.className = "badge badge-estimado";
       }
+    }
+
+    function toggleScheduleEditor() {
+      state.scheduleEditorOpen = !state.scheduleEditorOpen;
+      const panel = document.getElementById("scheduleOverridePanel");
+      if (panel) {
+        panel.classList.toggle("hidden", !state.scheduleEditorOpen);
+      }
+      populateScheduleSelects();
+    }
+
+    function onScheduleFieldChange(field, value) {
+      const clean = normalizeHHMM(value, "21:00");
+      if (field === "start") {
+        state.horaInicio = clean;
+        state.schedule = buildDefaultSchedule(clean, state.altoRiesgo);
+      } else if (field === "open") {
+        state.schedule.open = clean;
+      } else if (field === "halftime") {
+        state.schedule.halftime = clean;
+      } else if (field === "end") {
+        state.schedule.end = clean;
+      }
+      renderMatchDoors();
+      if (state.zoneSubView === "convocatoria") {
+        renderFinalConvocatoriaSheet();
+      } else if (state.zoneSubView === "firma") {
+        renderSignSheet();
+      }
+    }
+
+    function toggleHighRiskMode(isHighRisk) {
+      state.altoRiesgo = Boolean(isHighRisk);
+      state.schedule = buildDefaultSchedule(state.schedule.start || state.horaInicio, state.altoRiesgo);
+      renderMatchDoors();
+      showBanner(
+        "encMsg",
+        state.altoRiesgo
+          ? `Modo alto riesgo activado: apertura ajustada a las ${state.schedule.open}.`
+          : `Modo partido normal: apertura ajustada a las ${state.schedule.open}.`,
+        "ok"
+      );
+    }
+
+    function resetScheduleToDefault() {
+      state.altoRiesgo = MATCH_INFO.altoRiesgo;
+      state.horaInicio = MATCH_INFO.horaInicio;
+      state.schedule = buildDefaultSchedule(MATCH_INFO.horaInicio, MATCH_INFO.altoRiesgo);
+      renderMatchDoors();
+      showBanner("encMsg", "Horas restablecidas a la configuración por defecto del partido.", "ok");
     }
 
     function showBanner(id, msg, type = "ok") {
@@ -1834,7 +1968,7 @@
 
       if (mine && mine.disponible && mine.barraAsignada) {
         const horaEntrada = normalizeHHMM(mine.horaEntrada, "—");
-        const horaSalida = computeMatchSchedule().end;
+        const horaSalida = state.schedule.end;
         const totalHoras = computeShiftHours(horaEntrada, horaSalida);
         const rolTexto = getRoleDisplayName(normalizeRoleKey(mine.puestoRol));
 
@@ -2343,7 +2477,7 @@
     function renderFinalConvocatoriaSheet() {
       const wrap = document.getElementById("finalSheetTableWrap");
       const badge = document.getElementById("finalAssignedCountBadge");
-      const horaSalida = computeMatchSchedule().end;
+      const horaSalida = state.schedule.end;
       const assignedRows = getOrderedAssignedRows();
 
       badge.textContent = `${assignedRows.length} asignados`;
@@ -2416,7 +2550,7 @@
     function renderSignSheet() {
       const wrap = document.getElementById("signSheetTableWrap");
       const badge = document.getElementById("signAssignedCountBadge");
-      const horaSalida = computeMatchSchedule().end;
+      const horaSalida = state.schedule.end;
       const assignedRows = getOrderedAssignedRows();
 
       badge.textContent = `${assignedRows.length} asignados`;
