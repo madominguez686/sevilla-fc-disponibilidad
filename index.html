@@ -39,7 +39,7 @@
 
     .app-shell {
       width: 100%;
-      max-width: 440px;
+      max-width: 460px;
       display: flex;
       flex-direction: column;
       gap: 12px;
@@ -188,10 +188,10 @@
     input[type="password"],
     select {
       width: 100%;
-      padding: 11px 12px;
+      padding: 10px 11px;
       border: 1px solid #d1d5db;
       border-radius: 10px;
-      font-size: 14px;
+      font-size: 13px;
       background: #fff;
       color: var(--text);
     }
@@ -308,6 +308,20 @@
       cursor: pointer;
     }
 
+    .save-mini-btn {
+      padding: 9px 12px;
+      border: none;
+      border-radius: 10px;
+      background: var(--sfc);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .save-mini-btn:hover { background: var(--sfc-dark); }
+
     .status-banner {
       margin-top: 12px;
       padding: 10px 12px;
@@ -324,16 +338,33 @@
 
     .field-gap { margin-top: 12px; }
 
-    .person-item {
+    .assign-card {
       border: 1px solid var(--border);
       border-radius: 12px;
-      padding: 10px 12px;
-      margin-top: 8px;
+      padding: 12px;
+      margin-top: 10px;
+      background: #fafafa;
+    }
+
+    .assign-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       gap: 8px;
-      font-size: 13px;
+      margin-bottom: 10px;
+    }
+
+    .assign-grid {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr auto;
+      gap: 8px;
+      align-items: end;
+    }
+
+    @media (max-width: 420px) {
+      .assign-grid {
+        grid-template-columns: 1fr;
+      }
     }
 
     .pill-mini {
@@ -449,13 +480,14 @@
 
       <div id="viewEnc" class="card hidden" style="margin-top: 10px;">
         <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-          <h2 style="margin: 0; font-size: 16px;">Disponibilidades recibidas</h2>
+          <h2 style="margin: 0; font-size: 16px;">Convocatoria y disponibilidades</h2>
           <span id="encCount" class="pill-mini pill-ok">0 disponibles</span>
         </div>
-        <p style="margin: 4px 0 10px; font-size: 12px; color: var(--muted);">
-          Consulta de disponibilidades registradas para este partido.
+        <p id="encZoneSubtitle" style="margin: 4px 0 10px; font-size: 12px; color: var(--muted);">
+          Asigna barra y hora de entrada (cada 15 min) al personal disponible de tu zona.
         </p>
         <div id="encList"></div>
+        <div id="encMsg" class="status-banner"></div>
       </div>
     </div>
   </div>
@@ -463,6 +495,77 @@
   <script>
     const SUPABASE_URL = "https://marrvzyyyguqnpvdkicz.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_dxD-ImtvorOIUrqZUZrREQ_keHGZ7tD";
+
+    const BARRAS_ESTADIO = [
+      // Preferencia
+      { zona: "Preferencia", planta: "Baja", antigua: "Baja 2", barra: "Barra 009" },
+      { zona: "Preferencia", planta: "Baja", antigua: "Baja 1", barra: "Barra 001" },
+      { zona: "Preferencia", planta: "Entreplanta", antigua: "Entreplanta 1", barra: "Barra 101" },
+      { zona: "Preferencia", planta: "Entreplanta", antigua: "Entreplanta 2", barra: "Barra 112" },
+      { zona: "Preferencia", planta: "Alta", antigua: "Alta 3", barra: "Barra 220" },
+      { zona: "Preferencia", planta: "Alta", antigua: "Alta 2", barra: "Barra 201" },
+      { zona: "Preferencia", planta: "Alta", antigua: "Alta 1", barra: "Barra 202" },
+      { zona: "Preferencia", planta: "Alta", antigua: "Alta 4", barra: "Barra 219" },
+      { zona: "Preferencia", planta: "Almacen", antigua: "Almacen", barra: "Almacen Preferencia" },
+
+      // Fondo
+      { zona: "Fondo", planta: "Baja", antigua: "Baja 2", barra: "Barra 004" },
+      { zona: "Fondo", planta: "Baja", antigua: "Baja 2", barra: "Barra 005" },
+      { zona: "Fondo", planta: "Baja", antigua: "Baja 1", barra: "Barra 006" },
+      { zona: "Fondo", planta: "Alta", antigua: "Alta 4", barra: "Barra 209" },
+      { zona: "Fondo", planta: "Alta", antigua: "Alta 3", barra: "Barra 210" },
+      { zona: "Fondo", planta: "Alta", antigua: "Alta 2", barra: "Barra 211" },
+      { zona: "Fondo", planta: "Alta", antigua: "Alta 1", barra: "Barra 212" },
+      { zona: "Fondo", planta: "Almacen", antigua: "Almacen", barra: "Almacen Fondo" },
+
+      // Gol Norte
+      { zona: "Gol Norte", planta: "Baja", antigua: "Baja 2", barra: "Barra 007" },
+      { zona: "Gol Norte", planta: "Baja", antigua: "Baja 2", barra: "Barra 008" },
+      { zona: "Gol Norte", planta: "Entreplanta", antigua: "Entreplanta 1", barra: "Barra 111" },
+      { zona: "Gol Norte", planta: "Entreplanta", antigua: "Entreplanta 2", barra: "Barra 110" },
+      { zona: "Gol Norte", planta: "Entreplanta", antigua: "Entreplanta 3", barra: "Barra 109" },
+      { zona: "Gol Norte", planta: "Entreplanta", antigua: "Entreplanta 4", barra: "Barra 108" },
+      { zona: "Gol Norte", planta: "Entreplanta", antigua: "Entreplanta 5", barra: "Barra 107" },
+      { zona: "Gol Norte", planta: "Alta", antigua: "Alta 6", barra: "Barra 213" },
+      { zona: "Gol Norte", planta: "Alta", antigua: "Alta 5", barra: "Barra 214" },
+      { zona: "Gol Norte", planta: "Alta", antigua: "Alta 4", barra: "Barra 215" },
+      { zona: "Gol Norte", planta: "Alta", antigua: "Alta 3", barra: "Barra 216" },
+      { zona: "Gol Norte", planta: "Alta", antigua: "Alta 2", barra: "Barra 217" },
+      { zona: "Gol Norte", planta: "Alta", antigua: "Alta 1", barra: "Barra 218" },
+      { zona: "Gol Norte", planta: "Almacen", antigua: "Almacen", barra: "Almacen Gol Norte" },
+
+      // Gol Sur
+      { zona: "Gol Sur", planta: "Baja", antigua: "Baja 2", barra: "Barra 002" },
+      { zona: "Gol Sur", planta: "Baja", antigua: "Baja 1", barra: "Barra 003" },
+      { zona: "Gol Sur", planta: "Entreplanta", antigua: "Entreplanta 1", barra: "Barra 106" },
+      { zona: "Gol Sur", planta: "Entreplanta", antigua: "Entreplanta 2", barra: "Barra 105" },
+      { zona: "Gol Sur", planta: "Entreplanta", antigua: "Entreplanta 3", barra: "Barra 104" },
+      { zona: "Gol Sur", planta: "Entreplanta", antigua: "Entreplanta 4", barra: "Barra 103" },
+      { zona: "Gol Sur", planta: "Entreplanta", antigua: "Entreplanta 5", barra: "Barra 102" },
+      { zona: "Gol Sur", planta: "Alta", antigua: "Alta 1", barra: "Barra 208" },
+      { zona: "Gol Sur", planta: "Alta", antigua: "Alta 2", barra: "Barra 207" },
+      { zona: "Gol Sur", planta: "Alta", antigua: "Alta 3", barra: "Barra 206" },
+      { zona: "Gol Sur", planta: "Alta", antigua: "Alta 4", barra: "Barra 205" },
+      { zona: "Gol Sur", planta: "Alta", antigua: "Alta 5", barra: "Barra 204" },
+      { zona: "Gol Sur", planta: "Alta", antigua: "Alta 6", barra: "Barra 203" },
+      { zona: "Gol Sur", planta: "Almacen", antigua: "Almacen", barra: "Almacen Gol Sur" }
+    ];
+
+    function buildQuarterHourSlots(startHHMM = "15:00", endHHMM = "23:45") {
+      const [sh, sm] = startHHMM.split(":").map(Number);
+      const [eh, em] = endHHMM.split(":").map(Number);
+      const startTotal = sh * 60 + sm;
+      const endTotal = eh * 60 + em;
+      const slots = [];
+      for (let m = startTotal; m <= endTotal; m += 15) {
+        const hh = String(Math.floor(m / 60)).padStart(2, "0");
+        const mm = String(m % 60).padStart(2, "0");
+        slots.push(`${hh}:${mm}`);
+      }
+      return slots;
+    }
+
+    const TIME_SLOTS = buildQuarterHourSlots("15:00", "23:45");
 
     const STAFF = [
       { id: null, ficha: "160", nombre: "Abril Jiménez Rubio", zona: "Preferencia", rol: "camarero", email: "abril.jimenez@prueba.local" },
@@ -505,6 +608,12 @@
     function isZoneManagerRole(rol) {
       const r = String(rol || "").trim().toLowerCase();
       return r === "encargado_zona" || r === "encargado de zona" || r === "admin";
+    }
+
+    function getBarsForZone(zona) {
+      const z = String(zona || "").trim().toLowerCase();
+      if (!z) return BARRAS_ESTADIO;
+      return BARRAS_ESTADIO.filter((b) => b.zona.toLowerCase() === z);
     }
 
     function init() {
@@ -676,6 +785,8 @@
       await loadExistingAvailabilityForUser(user);
 
       if (esEncargadoZona) {
+        document.getElementById("encZoneSubtitle").textContent =
+          `Zona ${user.zona}: asigna barra y hora de entrada (cada 15 min) al personal disponible.`;
         roleTabs.classList.add("hidden");
         document.getElementById("viewEmp").classList.add("hidden");
         document.getElementById("viewEnc").classList.remove("hidden");
@@ -704,11 +815,15 @@
 
       if (data) {
         state.availabilities[user.ficha] = {
+          convocatoriaId: data.id,
+          empleadoId: data.empleado_id,
           ficha: user.ficha,
           nombre: user.nombre,
           zona: user.zona,
           disponible: Boolean(data.disponible),
           margen: data.margen_horas || (data.disponible ? "5 horas" : "No disponible"),
+          barraAsignada: data.barra_asignada || "",
+          horaEntrada: data.hora_entrada || "19:30",
           actualizado: "Guardado en BD"
         };
       }
@@ -759,11 +874,15 @@
           empDb?.zona_asignada ?? empDb?.zona ?? empDb?.area ?? fallback?.zona ?? "Sin zona";
 
         merged[ficha] = {
+          convocatoriaId: row.id,
+          empleadoId: row.empleado_id,
           ficha,
           nombre,
           zona,
           disponible: Boolean(row.disponible),
           margen: row.margen_horas || (row.disponible ? "5 horas" : "No disponible"),
+          barraAsignada: row.barra_asignada || "",
+          horaEntrada: row.hora_entrada || "19:30",
           actualizado: "Guardado en BD"
         };
       });
@@ -849,7 +968,9 @@
         return;
       }
 
+      const prev = state.availabilities[user.ficha] || {};
       const payload = {
+        ...prev,
         ficha: user.ficha,
         nombre: user.nombre,
         zona: user.zona,
@@ -883,26 +1004,105 @@
       renderEncargadoList();
     }
 
-    function renderEncargadoList() {
-      const listEl = document.getElementById("encList");
-      const items = Object.values(state.availabilities);
-      const okCount = items.filter((i) => i.disponible).length;
-      document.getElementById("encCount").textContent = `${okCount} disponibles`;
+    async function saveAssignmentForEmployee(ficha) {
+      const item = state.availabilities[ficha];
+      if (!item) return;
 
-      if (!items.length) {
-        listEl.innerHTML = `<div style="font-size:13px;color:var(--muted);padding:10px 0;">Aún no hay respuestas guardadas para LFP27.15.</div>`;
+      const safeId = ficha.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const barraSelect = document.getElementById(`barra_${safeId}`);
+      const horaSelect = document.getElementById(`hora_${safeId}`);
+      const barraAsignada = barraSelect ? barraSelect.value : "";
+      const horaEntrada = horaSelect ? horaSelect.value : "";
+
+      if (!barraAsignada) {
+        showBanner("encMsg", `Selecciona una barra para ${item.nombre}.`, "warn");
         return;
       }
 
-      listEl.innerHTML = items.map((it) => `
-        <div class="person-item">
-          <div>
-            <strong>${it.nombre}</strong> <span style="color:var(--muted);font-size:12px;">(#${it.ficha} · ${it.zona})</span>
-            <div style="font-size:12px;color:var(--muted);">Margen: ${it.margen} · ${it.actualizado}</div>
+      const allowedBars = getBarsForZone(state.currentUser?.zona);
+      const isAllowed = allowedBars.some((b) => b.barra === barraAsignada);
+      if (!isAllowed) {
+        showBanner("encMsg", `Solo puedes asignar barras de la zona ${state.currentUser?.zona}.`, "err");
+        return;
+      }
+
+      const { error } = await sbClient
+        .from("convocatorias")
+        .update({
+          barra_asignada: barraAsignada,
+          hora_entrada: horaEntrada
+        })
+        .eq("partido_id", "LFP27.15")
+        .eq("empleado_id", item.empleadoId);
+
+      if (error) {
+        showBanner("encMsg", `Error guardando asignación de ${item.nombre}: ${error.message}`, "err");
+        return;
+      }
+
+      item.barraAsignada = barraAsignada;
+      item.horaEntrada = horaEntrada;
+      item.actualizado = `Asignado ${new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}`;
+      showBanner("encMsg", `Asignación guardada: ${item.nombre} -> ${barraAsignada} a las ${horaEntrada}.`, "ok");
+      renderEncargadoList();
+    }
+
+    function renderEncargadoList() {
+      const listEl = document.getElementById("encList");
+      const allItems = Object.values(state.availabilities);
+      const disponibles = allItems.filter((i) => i.disponible);
+      document.getElementById("encCount").textContent = `${disponibles.length} disponibles`;
+
+      if (!disponibles.length) {
+        listEl.innerHTML = `<div style="font-size:13px;color:var(--muted);padding:10px 0;">Aún no hay personal disponible guardado para LFP27.15.</div>`;
+        return;
+      }
+
+      const allowedBars = getBarsForZone(state.currentUser?.zona);
+
+      listEl.innerHTML = disponibles.map((it) => {
+        const safeId = it.ficha.replace(/[^a-zA-Z0-9_-]/g, "_");
+        const barOptions = [
+          `<option value="">-- Seleccionar barra (${state.currentUser?.zona || "Zona"}) --</option>`,
+          ...allowedBars.map((b) => {
+            const label = `${b.barra} · ${b.planta} (${b.antigua})`;
+            const selected = it.barraAsignada === b.barra ? "selected" : "";
+            return `<option value="${b.barra}" ${selected}>${label}</option>`;
+          })
+        ].join("");
+
+        const hourOptions = TIME_SLOTS.map((slot) => {
+          const selected = it.horaEntrada === slot ? "selected" : "";
+          return `<option value="${slot}" ${selected}>${slot}</option>`;
+        }).join("");
+
+        return `
+          <div class="assign-card">
+            <div class="assign-header">
+              <div>
+                <strong>${it.nombre}</strong>
+                <span style="color:var(--muted);font-size:12px;">(#${it.ficha} · ${it.zona})</span>
+                <div style="font-size:12px;color:var(--muted);">
+                  Margen: ${it.margen} · ${it.barraAsignada ? `<strong>${it.barraAsignada}</strong> · Entrada <strong>${it.horaEntrada}</strong>` : "Sin barra asignada"}
+                </div>
+              </div>
+              <span class="pill-mini pill-ok">Disponible</span>
+            </div>
+
+            <div class="assign-grid">
+              <div>
+                <label for="barra_${safeId}">Barra (${state.currentUser?.zona || "Zona"})</label>
+                <select id="barra_${safeId}">${barOptions}</select>
+              </div>
+              <div>
+                <label for="hora_${safeId}">Hora entrada</label>
+                <select id="hora_${safeId}">${hourOptions}</select>
+              </div>
+              <button class="save-mini-btn" type="button" onclick="saveAssignmentForEmployee('${it.ficha}')">Guardar</button>
+            </div>
           </div>
-          <span class="pill-mini ${it.disponible ? "pill-ok" : "pill-no"}">${it.disponible ? "Disponible" : "No disp."}</span>
-        </div>
-      `).join("");
+        `;
+      }).join("");
     }
 
     init();
