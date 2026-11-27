@@ -369,7 +369,6 @@
     .pill-no { background: var(--bad-soft); color: #991b1b; }
     .pill-pend { background: #fef3c7; color: #92400e; }
 
-    /* Layout específico Encargado de Zona */
     .zone-workspace {
       display: grid;
       grid-template-columns: 370px 1fr;
@@ -410,6 +409,34 @@
       padding: 8px 6px;
       border-bottom: 1px solid #f1f5f9;
       vertical-align: middle;
+    }
+
+    .final-sheet-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin-top: 10px;
+    }
+
+    .final-sheet-table th {
+      text-align: left;
+      background: #f9fafb;
+      color: #374151;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 10px 10px;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .final-sheet-table td {
+      padding: 10px 10px;
+      border-bottom: 1px solid #e5e7eb;
+      vertical-align: middle;
+    }
+
+    .final-sheet-table tr:last-child td {
+      border-bottom: none;
     }
 
     .pending-row {
@@ -515,11 +542,35 @@
     }
 
     .hidden { display: none !important; }
+
+    @media print {
+      body {
+        background: #fff;
+        padding: 0;
+      }
+      .no-print,
+      #loginCard,
+      #sessionCard,
+      #zoneModeTabs,
+      #viewEmp,
+      #viewAssembly {
+        display: none !important;
+      }
+      .app-shell,
+      .app-shell.wide-mode {
+        max-width: 100%;
+        gap: 8px;
+      }
+      .card {
+        box-shadow: none;
+        border: 1px solid #d1d5db;
+      }
+    }
   </style>
 </head>
 <body>
   <div id="appShell" class="app-shell">
-    <div class="card header-sfc">
+    <div id="matchHeaderCard" class="card header-sfc">
       <div class="top-row">
         <span class="badge">Sevilla FC · Hostelería</span>
         <span id="confirmBadge" class="badge badge-estimado">Hora estimada</span>
@@ -572,7 +623,7 @@
     </div>
 
     <div id="mainApp" class="hidden">
-      <div class="card" style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+      <div id="sessionCard" class="card no-print" style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
         <div>
           <div style="font-size: 11px; color: var(--muted); font-weight: 700;">SESIÓN ACTIVA</div>
           <div id="sessionUserTitle" style="font-size: 14px; font-weight: 800;">—</div>
@@ -581,9 +632,9 @@
         <button class="secondary-btn" style="width: auto; margin: 0;" type="button" onclick="logoutUser()">Salir</button>
       </div>
 
-      <div id="roleTabs" class="tabs hidden" style="margin-top: 10px;">
-        <button id="tabEmp" class="tab-btn active" type="button" onclick="switchTab('emp')">Mi ficha</button>
-        <button id="tabEnc" class="tab-btn" type="button" onclick="switchTab('enc')">Encargado zona</button>
+      <div id="zoneModeTabs" class="tabs hidden no-print" style="margin-top: 10px;">
+        <button id="tabMontar" class="tab-btn active" type="button" onclick="switchZoneView('montar')">Montar convocatoria</button>
+        <button id="tabConvocatoria" class="tab-btn" type="button" onclick="switchZoneView('convocatoria')">Convocatoria final</button>
       </div>
 
       <div id="viewEmp" class="card" style="margin-top: 10px;">
@@ -614,7 +665,7 @@
       </div>
 
       <div id="viewEnc" class="hidden" style="margin-top: 10px;">
-        <div class="zone-workspace">
+        <div id="viewAssembly" class="zone-workspace">
           <div class="left-stack">
             <div class="card">
               <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
@@ -653,6 +704,23 @@
             <div id="encMsg" class="status-banner"></div>
             <div id="postsAssemblyList"></div>
           </div>
+        </div>
+
+        <div id="viewFinalSheet" class="card hidden">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div>
+              <h2 style="margin: 0; font-size: 17px;">Convocatoria asignada · <span id="finalSheetZoneLabel">Preferencia</span></h2>
+              <p style="margin: 3px 0 0; font-size: 12px; color: var(--muted);">
+                Hora de salida calculada como hora del partido + 2 horas (<strong id="finalExitRef">23:00</strong>).
+              </p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;" class="no-print">
+              <span id="finalAssignedCountBadge" class="pill-mini pill-ok">0 asignados</span>
+              <button class="mini-toggle-btn" type="button" onclick="window.print()">Imprimir / PDF</button>
+            </div>
+          </div>
+
+          <div id="finalSheetTableWrap"></div>
         </div>
       </div>
     </div>
@@ -748,6 +816,15 @@
       return `${hh.padStart(2, "0")}:${mm}`;
     }
 
+    function addHoursToHHMM(hhmm, hoursToAdd = 2) {
+      const clean = normalizeHHMM(hhmm, "21:00");
+      const [hh, mm] = clean.split(":").map(Number);
+      const totalMins = (hh * 60 + mm + hoursToAdd * 60) % 1440;
+      const outH = String(Math.floor(totalMins / 60)).padStart(2, "0");
+      const outM = String(totalMins % 60).padStart(2, "0");
+      return `${outH}:${outM}`;
+    }
+
     const TIME_SLOTS = buildQuarterHourSlots("15:00", "23:45");
 
     const STAFF = [
@@ -780,6 +857,7 @@
       allEmployees: [],
       availabilities: {},
       pendingCollapsed: false,
+      zoneSubView: "montar",
       postConfigs: {}
     };
 
@@ -812,6 +890,7 @@
       document.getElementById("empQuestionLabel").textContent = `¿Estás disponible para el ${MATCH_INFO.partido}?`;
       document.getElementById("respondedMatchSubtitle").textContent =
         `Personal que ya ha indicado su respuesta para el ${MATCH_INFO.partido}.`;
+      document.getElementById("finalExitRef").textContent = addHoursToHHMM(MATCH_INFO.horaInicio, 2);
     }
 
     function init() {
@@ -966,6 +1045,22 @@
       await resolveAndOpenUserByEmail(signedEmail);
     }
 
+    function switchZoneView(viewName) {
+      state.zoneSubView = viewName === "convocatoria" ? "convocatoria" : "montar";
+      const isFinal = state.zoneSubView === "convocatoria";
+
+      document.getElementById("tabMontar").classList.toggle("active", !isFinal);
+      document.getElementById("tabConvocatoria").classList.toggle("active", isFinal);
+      document.getElementById("viewAssembly").classList.toggle("hidden", isFinal);
+      document.getElementById("viewFinalSheet").classList.toggle("hidden", !isFinal);
+
+      if (isFinal) {
+        renderFinalConvocatoriaSheet();
+      } else {
+        renderZoneWorkspace();
+      }
+    }
+
     async function openAppForUser(user) {
       state.currentUser = user;
       document.getElementById("loginCard").classList.add("hidden");
@@ -983,20 +1078,19 @@
       document.getElementById("sessionUserTitle").textContent = user.nombre;
       document.getElementById("sessionUserMeta").textContent = `Ficha #${user.ficha} · ${user.zona} · ${etiquetaRol}`;
 
-      const roleTabs = document.getElementById("roleTabs");
-
       await loadExistingAvailabilityForUser(user);
 
       if (esEncargadoZona) {
-        document.getElementById("encZoneBadge").textContent = `Zona: ${user.zona}`;
-        document.getElementById("encZoneSubtitle").textContent =
-          `Zona ${user.zona} · Orden: Almacén, Bajas, Entreplantas y Altas. Selecciona encargados y camareros por puesto.`;
-        roleTabs.classList.add("hidden");
+        document.getElementById("zoneModeTabs").classList.remove("hidden");
         document.getElementById("viewEmp").classList.add("hidden");
         document.getElementById("viewEnc").classList.remove("hidden");
-        renderZoneWorkspace();
+        document.getElementById("encZoneBadge").textContent = `Zona: ${user.zona}`;
+        document.getElementById("finalSheetZoneLabel").textContent = user.zona;
+        document.getElementById("encZoneSubtitle").textContent =
+          `Zona ${user.zona} · Orden: Almacén, Bajas, Entreplantas y Altas. Selecciona encargados y camareros por puesto.`;
+        switchZoneView(state.zoneSubView);
       } else {
-        roleTabs.classList.add("hidden");
+        document.getElementById("zoneModeTabs").classList.add("hidden");
         document.getElementById("viewEnc").classList.add("hidden");
         document.getElementById("viewEmp").classList.remove("hidden");
         loadEmployeeFicha(user);
@@ -1120,6 +1214,7 @@
       state.currentUser = null;
       state.availabilities = {};
       state.postConfigs = {};
+      state.zoneSubView = "montar";
       document.getElementById("appShell").classList.remove("wide-mode");
       document.getElementById("loginPassword").value = "";
       document.getElementById("loginMsg").className = "status-banner";
@@ -1479,6 +1574,70 @@
           </div>
         `;
       }).join("");
+    }
+
+    function renderFinalConvocatoriaSheet() {
+      const wrap = document.getElementById("finalSheetTableWrap");
+      const badge = document.getElementById("finalAssignedCountBadge");
+      const posts = getPostsForZone(state.currentUser?.zona);
+      const postOrderMap = new Map(posts.map((p, idx) => [p.barra, idx]));
+
+      const horaSalida = addHoursToHHMM(MATCH_INFO.horaInicio, 2);
+
+      const assignedRows = Object.values(state.availabilities)
+        .filter((item) => item.disponible && item.barraAsignada)
+        .filter((item) => {
+          const zUser = String(state.currentUser?.zona || "").trim().toLowerCase();
+          if (!zUser) return true;
+          return postOrderMap.has(item.barraAsignada) || String(item.zona || "").trim().toLowerCase() === zUser;
+        })
+        .sort((a, b) => {
+          const oa = postOrderMap.has(a.barraAsignada) ? postOrderMap.get(a.barraAsignada) : 999;
+          const ob = postOrderMap.has(b.barraAsignada) ? postOrderMap.get(b.barraAsignada) : 999;
+          if (oa !== ob) return oa - ob;
+          const ra = (a.puestoRol === "encargado" || a.puestoRol === "encargado_zona") ? 0 : 1;
+          const rb = (b.puestoRol === "encargado" || b.puestoRol === "encargado_zona") ? 0 : 1;
+          if (ra !== rb) return ra - rb;
+          return a.nombre.localeCompare(b.nombre, "es");
+        });
+
+      badge.textContent = `${assignedRows.length} asignados`;
+
+      if (!assignedRows.length) {
+        wrap.innerHTML = `<div style="font-size:13px;color:var(--muted);padding:14px 0;">Aún no hay empleados asignados a ningún puesto para ${MATCH_INFO.partido}.</div>`;
+        return;
+      }
+
+      const bodyHtml = assignedRows.map((row) => {
+        const esEnc = row.puestoRol === "encargado" || row.puestoRol === "encargado_zona";
+        const puestoTexto = esEnc ? "Encargado" : "Camarero";
+        const horaEntradaTexto = normalizeHHMM(row.horaEntrada, "—");
+
+        return `
+          <tr>
+            <td><strong>${row.barraAsignada}</strong></td>
+            <td>${row.nombre}</td>
+            <td><span class="pill-mini ${esEnc ? "" : "pill-ok"}">${puestoTexto}</span></td>
+            <td><strong>${horaEntradaTexto}</strong></td>
+            <td><strong>${horaSalida}</strong></td>
+          </tr>
+        `;
+      }).join("");
+
+      wrap.innerHTML = `
+        <table class="final-sheet-table">
+          <thead>
+            <tr>
+              <th>Ubicación</th>
+              <th>Persona</th>
+              <th>Puesto</th>
+              <th>Hora entrada</th>
+              <th>Hora salida</th>
+            </tr>
+          </thead>
+          <tbody>${bodyHtml}</tbody>
+        </table>
+      `;
     }
 
     function renderZoneWorkspace() {
