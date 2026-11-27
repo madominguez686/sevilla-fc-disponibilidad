@@ -34,7 +34,7 @@
       min-height: 100vh;
       display: flex;
       justify-content: center;
-      padding: 16px 12px 40px;
+      padding: 16px 12px 44px;
     }
 
     .app-shell {
@@ -43,6 +43,11 @@
       display: flex;
       flex-direction: column;
       gap: 12px;
+      transition: max-width 0.2s ease;
+    }
+
+    .app-shell.wide-mode {
+      max-width: 1180px;
     }
 
     .card {
@@ -180,15 +185,16 @@
       font-size: 12px;
       font-weight: 700;
       color: #374151;
-      margin-bottom: 6px;
+      margin-bottom: 5px;
     }
 
     input[type="text"],
     input[type="email"],
     input[type="password"],
+    input[type="number"],
     select {
       width: 100%;
-      padding: 10px 11px;
+      padding: 9px 10px;
       border: 1px solid #d1d5db;
       border-radius: 10px;
       font-size: 13px;
@@ -308,7 +314,18 @@
       cursor: pointer;
     }
 
-    .save-mini-btn {
+    .mini-toggle-btn {
+      border: 1px solid #d1d5db;
+      background: #fff;
+      color: #374151;
+      border-radius: 8px;
+      padding: 5px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .save-slot-btn {
       padding: 9px 12px;
       border: none;
       border-radius: 10px;
@@ -320,7 +337,7 @@
       white-space: nowrap;
     }
 
-    .save-mini-btn:hover { background: var(--sfc-dark); }
+    .save-slot-btn:hover { background: var(--sfc-dark); }
 
     .status-banner {
       margin-top: 12px;
@@ -338,35 +355,6 @@
 
     .field-gap { margin-top: 12px; }
 
-    .assign-card {
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 12px;
-      margin-top: 10px;
-      background: #fafafa;
-    }
-
-    .assign-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 10px;
-    }
-
-    .assign-grid {
-      display: grid;
-      grid-template-columns: 1.4fr 1fr auto;
-      gap: 8px;
-      align-items: end;
-    }
-
-    @media (max-width: 420px) {
-      .assign-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
     .pill-mini {
       font-size: 11px;
       font-weight: 700;
@@ -374,16 +362,163 @@
       border-radius: 999px;
       background: #f3f4f6;
       color: #111827;
+      white-space: nowrap;
     }
 
     .pill-ok { background: var(--ok-soft); color: #065f46; }
     .pill-no { background: var(--bad-soft); color: #991b1b; }
+    .pill-pend { background: #fef3c7; color: #92400e; }
+
+    /* Layout específico Encargado de Zona */
+    .zone-workspace {
+      display: grid;
+      grid-template-columns: 370px 1fr;
+      gap: 14px;
+      align-items: start;
+    }
+
+    @media (max-width: 920px) {
+      .zone-workspace {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .left-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
+    .data-table th {
+      text-align: left;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      padding: 7px 6px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .data-table td {
+      padding: 8px 6px;
+      border-bottom: 1px solid #f1f5f9;
+      vertical-align: middle;
+    }
+
+    .pending-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 0;
+      border-bottom: 1px solid #f3f4f6;
+      font-size: 12px;
+    }
+
+    .post-card {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 13px;
+      margin-top: 10px;
+      background: #fafafa;
+    }
+
+    .post-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .post-title-wrap strong {
+      font-size: 14px;
+      display: block;
+    }
+
+    .post-title-wrap small {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .headcount-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .hc-box {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: #fff;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      padding: 4px 8px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .hc-box input {
+      width: 48px;
+      padding: 4px 6px;
+      border: 1px solid #e5e7eb;
+      border-radius: 7px;
+      text-align: center;
+      font-weight: 800;
+    }
+
+    .slots-container {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .slot-row {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 11px;
+      padding: 9px 10px;
+      display: grid;
+      grid-template-columns: 92px 1.5fr 110px auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    @media (max-width: 640px) {
+      .slot-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .slot-role-tag {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 5px 8px;
+      border-radius: 8px;
+      text-align: center;
+      background: #eef2ff;
+      color: #1e3a8a;
+    }
+
+    .slot-role-tag.camarero {
+      background: #fff1f4;
+      color: var(--sfc-dark);
+    }
 
     .hidden { display: none !important; }
   </style>
 </head>
 <body>
-  <div class="app-shell">
+  <div id="appShell" class="app-shell">
     <div class="card header-sfc">
       <div class="top-row">
         <span class="badge">Sevilla FC · Hostelería</span>
@@ -478,16 +613,47 @@
         <div id="empMsg" class="status-banner"></div>
       </div>
 
-      <div id="viewEnc" class="card hidden" style="margin-top: 10px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-          <h2 style="margin: 0; font-size: 16px;">Convocatoria y disponibilidades</h2>
-          <span id="encCount" class="pill-mini pill-ok">0 disponibles</span>
+      <div id="viewEnc" class="hidden" style="margin-top: 10px;">
+        <div class="zone-workspace">
+          <div class="left-stack">
+            <div class="card">
+              <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                <h2 style="margin: 0; font-size: 15px;">Disponibilidad comunicada</h2>
+                <span id="encCount" class="pill-mini pill-ok">0 disponibles</span>
+              </div>
+              <p style="margin: 4px 0 6px; font-size: 12px; color: var(--muted);">
+                Personal que ya ha indicado su respuesta para LFP27.15.
+              </p>
+              <div id="respondedTableWrap"></div>
+            </div>
+
+            <div class="card">
+              <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                <h2 style="margin: 0; font-size: 15px;">Pendientes de responder</h2>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span id="pendingCountBadge" class="pill-mini pill-pend">0</span>
+                  <button id="togglePendingBtn" class="mini-toggle-btn" type="button" onclick="togglePendingList()">Minimizar</button>
+                </div>
+              </div>
+              <div id="pendingListBody" style="margin-top: 8px;"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+              <div>
+                <h2 style="margin: 0; font-size: 16px;">Montaje de convocatoria por puesto</h2>
+                <p id="encZoneSubtitle" style="margin: 3px 0 0; font-size: 12px; color: var(--muted);">
+                  Orden: Almacén · Bajas · Entreplantas · Altas. Indica encargados y camareros por puesto.
+                </p>
+              </div>
+              <span id="encZoneBadge" class="pill-mini">Zona</span>
+            </div>
+
+            <div id="encMsg" class="status-banner"></div>
+            <div id="postsAssemblyList"></div>
+          </div>
         </div>
-        <p id="encZoneSubtitle" style="margin: 4px 0 10px; font-size: 12px; color: var(--muted);">
-          Asigna barra y hora de entrada (cada 15 min) al personal disponible de tu zona.
-        </p>
-        <div id="encList"></div>
-        <div id="encMsg" class="status-banner"></div>
       </div>
     </div>
   </div>
@@ -496,59 +662,60 @@
     const SUPABASE_URL = "https://marrvzyyyguqnpvdkicz.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_dxD-ImtvorOIUrqZUZrREQ_keHGZ7tD";
 
-    const BARRAS_ESTADIO = [
+    // Orden estricto solicitado: 1. Almacen, 2. Bajas, 3. Entreplantas, 4. Altas
+    const PUESTOS_ESTADIO = [
       // Preferencia
-      { zona: "Preferencia", planta: "Baja", antigua: "Baja 2", barra: "Barra 009" },
-      { zona: "Preferencia", planta: "Baja", antigua: "Baja 1", barra: "Barra 001" },
-      { zona: "Preferencia", planta: "Entreplanta", antigua: "Entreplanta 1", barra: "Barra 101" },
-      { zona: "Preferencia", planta: "Entreplanta", antigua: "Entreplanta 2", barra: "Barra 112" },
-      { zona: "Preferencia", planta: "Alta", antigua: "Alta 3", barra: "Barra 220" },
-      { zona: "Preferencia", planta: "Alta", antigua: "Alta 2", barra: "Barra 201" },
-      { zona: "Preferencia", planta: "Alta", antigua: "Alta 1", barra: "Barra 202" },
-      { zona: "Preferencia", planta: "Alta", antigua: "Alta 4", barra: "Barra 219" },
-      { zona: "Preferencia", planta: "Almacen", antigua: "Almacen", barra: "Almacen Preferencia" },
+      { id: "pref_alm", zona: "Preferencia", categoria: "Almacen", planta: "Almacen", antigua: "Almacen", barra: "Almacen Preferencia", orden: 1 },
+      { id: "pref_b009", zona: "Preferencia", categoria: "Bajas", planta: "Baja", antigua: "Baja 2", barra: "Barra 009", orden: 2 },
+      { id: "pref_b001", zona: "Preferencia", categoria: "Bajas", planta: "Baja", antigua: "Baja 1", barra: "Barra 001", orden: 3 },
+      { id: "pref_e101", zona: "Preferencia", categoria: "Entreplantas", planta: "Entreplanta", antigua: "Entreplanta 1", barra: "Barra 101", orden: 4 },
+      { id: "pref_e112", zona: "Preferencia", categoria: "Entreplantas", planta: "Entreplanta", antigua: "Entreplanta 2", barra: "Barra 112", orden: 5 },
+      { id: "pref_a220", zona: "Preferencia", categoria: "Altas", planta: "Alta", antigua: "Alta 3", barra: "Barra 220", orden: 6 },
+      { id: "pref_a201", zona: "Preferencia", categoria: "Altas", planta: "Alta", antigua: "Alta 2", barra: "Barra 201", orden: 7 },
+      { id: "pref_a202", zona: "Preferencia", categoria: "Altas", planta: "Alta", antigua: "Alta 1", barra: "Barra 202", orden: 8 },
+      { id: "pref_a219", zona: "Preferencia", categoria: "Altas", planta: "Alta", antigua: "Alta 4", barra: "Barra 219", orden: 9 },
 
       // Fondo
-      { zona: "Fondo", planta: "Baja", antigua: "Baja 2", barra: "Barra 004" },
-      { zona: "Fondo", planta: "Baja", antigua: "Baja 2", barra: "Barra 005" },
-      { zona: "Fondo", planta: "Baja", antigua: "Baja 1", barra: "Barra 006" },
-      { zona: "Fondo", planta: "Alta", antigua: "Alta 4", barra: "Barra 209" },
-      { zona: "Fondo", planta: "Alta", antigua: "Alta 3", barra: "Barra 210" },
-      { zona: "Fondo", planta: "Alta", antigua: "Alta 2", barra: "Barra 211" },
-      { zona: "Fondo", planta: "Alta", antigua: "Alta 1", barra: "Barra 212" },
-      { zona: "Fondo", planta: "Almacen", antigua: "Almacen", barra: "Almacen Fondo" },
+      { id: "fond_alm", zona: "Fondo", categoria: "Almacen", planta: "Almacen", antigua: "Almacen", barra: "Almacen Fondo", orden: 1 },
+      { id: "fond_b004", zona: "Fondo", categoria: "Bajas", planta: "Baja", antigua: "Baja 2", barra: "Barra 004", orden: 2 },
+      { id: "fond_b005", zona: "Fondo", categoria: "Bajas", planta: "Baja", antigua: "Baja 2", barra: "Barra 005", orden: 3 },
+      { id: "fond_b006", zona: "Fondo", categoria: "Bajas", planta: "Baja", antigua: "Baja 1", barra: "Barra 006", orden: 4 },
+      { id: "fond_a209", zona: "Fondo", categoria: "Altas", planta: "Alta", antigua: "Alta 4", barra: "Barra 209", orden: 5 },
+      { id: "fond_a210", zona: "Fondo", categoria: "Altas", planta: "Alta", antigua: "Alta 3", barra: "Barra 210", orden: 6 },
+      { id: "fond_a211", zona: "Fondo", categoria: "Altas", planta: "Alta", antigua: "Alta 2", barra: "Barra 211", orden: 7 },
+      { id: "fond_a212", zona: "Fondo", categoria: "Altas", planta: "Alta", antigua: "Alta 1", barra: "Barra 212", orden: 8 },
 
       // Gol Norte
-      { zona: "Gol Norte", planta: "Baja", antigua: "Baja 2", barra: "Barra 007" },
-      { zona: "Gol Norte", planta: "Baja", antigua: "Baja 2", barra: "Barra 008" },
-      { zona: "Gol Norte", planta: "Entreplanta", antigua: "Entreplanta 1", barra: "Barra 111" },
-      { zona: "Gol Norte", planta: "Entreplanta", antigua: "Entreplanta 2", barra: "Barra 110" },
-      { zona: "Gol Norte", planta: "Entreplanta", antigua: "Entreplanta 3", barra: "Barra 109" },
-      { zona: "Gol Norte", planta: "Entreplanta", antigua: "Entreplanta 4", barra: "Barra 108" },
-      { zona: "Gol Norte", planta: "Entreplanta", antigua: "Entreplanta 5", barra: "Barra 107" },
-      { zona: "Gol Norte", planta: "Alta", antigua: "Alta 6", barra: "Barra 213" },
-      { zona: "Gol Norte", planta: "Alta", antigua: "Alta 5", barra: "Barra 214" },
-      { zona: "Gol Norte", planta: "Alta", antigua: "Alta 4", barra: "Barra 215" },
-      { zona: "Gol Norte", planta: "Alta", antigua: "Alta 3", barra: "Barra 216" },
-      { zona: "Gol Norte", planta: "Alta", antigua: "Alta 2", barra: "Barra 217" },
-      { zona: "Gol Norte", planta: "Alta", antigua: "Alta 1", barra: "Barra 218" },
-      { zona: "Gol Norte", planta: "Almacen", antigua: "Almacen", barra: "Almacen Gol Norte" },
+      { id: "gn_alm", zona: "Gol Norte", categoria: "Almacen", planta: "Almacen", antigua: "Almacen", barra: "Almacen Gol Norte", orden: 1 },
+      { id: "gn_b007", zona: "Gol Norte", categoria: "Bajas", planta: "Baja", antigua: "Baja 2", barra: "Barra 007", orden: 2 },
+      { id: "gn_b008", zona: "Gol Norte", categoria: "Bajas", planta: "Baja", antigua: "Baja 2", barra: "Barra 008", orden: 3 },
+      { id: "gn_e111", zona: "Gol Norte", categoria: "Entreplantas", planta: "Entreplanta", antigua: "Entreplanta 1", barra: "Barra 111", orden: 4 },
+      { id: "gn_e110", zona: "Gol Norte", categoria: "Entreplantas", planta: "Entreplanta", antigua: "Entreplanta 2", barra: "Barra 110", orden: 5 },
+      { id: "gn_e109", zona: "Gol Norte", categoria: "Entreplantas", planta: "Entreplanta", antigua: "Entreplanta 3", barra: "Barra 109", orden: 6 },
+      { id: "gn_e108", zona: "Gol Norte", categoria: "Entreplantas", planta: "Entreplanta", antigua: "Entreplanta 4", barra: "Barra 108", orden: 7 },
+      { id: "gn_e107", zona: "Gol Norte", categoria: "Entreplantas", planta: "Entreplanta", antigua: "Entreplanta 5", barra: "Barra 107", orden: 8 },
+      { id: "gn_a213", zona: "Gol Norte", categoria: "Altas", planta: "Alta", antigua: "Alta 6", barra: "Barra 213", orden: 9 },
+      { id: "gn_a214", zona: "Gol Norte", categoria: "Altas", planta: "Alta", antigua: "Alta 5", barra: "Barra 214", orden: 10 },
+      { id: "gn_a215", zona: "Gol Norte", categoria: "Altas", planta: "Alta", antigua: "Alta 4", barra: "Barra 215", orden: 11 },
+      { id: "gn_a216", zona: "Gol Norte", categoria: "Altas", planta: "Alta", antigua: "Alta 3", barra: "Barra 216", orden: 12 },
+      { id: "gn_a217", zona: "Gol Norte", categoria: "Altas", planta: "Alta", antigua: "Alta 2", barra: "Barra 217", orden: 13 },
+      { id: "gn_a218", zona: "Gol Norte", categoria: "Altas", planta: "Alta", antigua: "Alta 1", barra: "Barra 218", orden: 14 },
 
       // Gol Sur
-      { zona: "Gol Sur", planta: "Baja", antigua: "Baja 2", barra: "Barra 002" },
-      { zona: "Gol Sur", planta: "Baja", antigua: "Baja 1", barra: "Barra 003" },
-      { zona: "Gol Sur", planta: "Entreplanta", antigua: "Entreplanta 1", barra: "Barra 106" },
-      { zona: "Gol Sur", planta: "Entreplanta", antigua: "Entreplanta 2", barra: "Barra 105" },
-      { zona: "Gol Sur", planta: "Entreplanta", antigua: "Entreplanta 3", barra: "Barra 104" },
-      { zona: "Gol Sur", planta: "Entreplanta", antigua: "Entreplanta 4", barra: "Barra 103" },
-      { zona: "Gol Sur", planta: "Entreplanta", antigua: "Entreplanta 5", barra: "Barra 102" },
-      { zona: "Gol Sur", planta: "Alta", antigua: "Alta 1", barra: "Barra 208" },
-      { zona: "Gol Sur", planta: "Alta", antigua: "Alta 2", barra: "Barra 207" },
-      { zona: "Gol Sur", planta: "Alta", antigua: "Alta 3", barra: "Barra 206" },
-      { zona: "Gol Sur", planta: "Alta", antigua: "Alta 4", barra: "Barra 205" },
-      { zona: "Gol Sur", planta: "Alta", antigua: "Alta 5", barra: "Barra 204" },
-      { zona: "Gol Sur", planta: "Alta", antigua: "Alta 6", barra: "Barra 203" },
-      { zona: "Gol Sur", planta: "Almacen", antigua: "Almacen", barra: "Almacen Gol Sur" }
+      { id: "gs_alm", zona: "Gol Sur", categoria: "Almacen", planta: "Almacen", antigua: "Almacen", barra: "Almacen Gol Sur", orden: 1 },
+      { id: "gs_b002", zona: "Gol Sur", categoria: "Bajas", planta: "Baja", antigua: "Baja 2", barra: "Barra 002", orden: 2 },
+      { id: "gs_b003", zona: "Gol Sur", categoria: "Bajas", planta: "Baja", antigua: "Baja 1", barra: "Barra 003", orden: 3 },
+      { id: "gs_e106", zona: "Gol Sur", categoria: "Entreplantas", planta: "Entreplanta", antigua: "Entreplanta 1", barra: "Barra 106", orden: 4 },
+      { id: "gs_e105", zona: "Gol Sur", categoria: "Entreplantas", planta: "Entreplanta", antigua: "Entreplanta 2", barra: "Barra 105", orden: 5 },
+      { id: "gs_e104", zona: "Gol Sur", categoria: "Entreplantas", planta: "Entreplanta", antigua: "Entreplanta 3", barra: "Barra 104", orden: 6 },
+      { id: "gs_e103", zona: "Gol Sur", categoria: "Entreplantas", planta: "Entreplanta", antigua: "Entreplanta 4", barra: "Barra 103", orden: 7 },
+      { id: "gs_e102", zona: "Gol Sur", categoria: "Entreplantas", planta: "Entreplanta", antigua: "Entreplanta 5", barra: "Barra 102", orden: 8 },
+      { id: "gs_a208", zona: "Gol Sur", categoria: "Altas", planta: "Alta", antigua: "Alta 1", barra: "Barra 208", orden: 9 },
+      { id: "gs_a207", zona: "Gol Sur", categoria: "Altas", planta: "Alta", antigua: "Alta 2", barra: "Barra 207", orden: 10 },
+      { id: "gs_a206", zona: "Gol Sur", categoria: "Altas", planta: "Alta", antigua: "Alta 3", barra: "Barra 206", orden: 11 },
+      { id: "gs_a205", zona: "Gol Sur", categoria: "Altas", planta: "Alta", antigua: "Alta 4", barra: "Barra 205", orden: 12 },
+      { id: "gs_a204", zona: "Gol Sur", categoria: "Altas", planta: "Alta", antigua: "Alta 5", barra: "Barra 204", orden: 13 },
+      { id: "gs_a203", zona: "Gol Sur", categoria: "Altas", planta: "Alta", antigua: "Alta 6", barra: "Barra 203", orden: 14 }
     ];
 
     function buildQuarterHourSlots(startHHMM = "15:00", endHHMM = "23:45") {
@@ -594,7 +761,11 @@
       currentUser: null,
       draftAvailable: null,
       draftMargin: "5 horas",
-      availabilities: {}
+      allEmployees: [],
+      availabilities: {},
+      pendingCollapsed: false,
+      // postConfigs[barraName] = { encCount: 0, camCount: 0, slots: [{ rol: 'encargado'|'camarero', empleadoId: '', hora: '19:30' }] }
+      postConfigs: {}
     };
 
     const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -610,10 +781,12 @@
       return r === "encargado_zona" || r === "encargado de zona" || r === "admin";
     }
 
-    function getBarsForZone(zona) {
+    function getPostsForZone(zona) {
       const z = String(zona || "").trim().toLowerCase();
-      if (!z) return BARRAS_ESTADIO;
-      return BARRAS_ESTADIO.filter((b) => b.zona.toLowerCase() === z);
+      const list = z
+        ? PUESTOS_ESTADIO.filter((p) => p.zona.toLowerCase() === z)
+        : PUESTOS_ESTADIO;
+      return [...list].sort((a, b) => a.orden - b.orden);
     }
 
     function init() {
@@ -690,6 +863,7 @@
         nombre: data.nombre_mostrar ?? data.nombre ?? data.nombre_completo ?? localFallback?.nombre ?? normalized,
         zona: data.zona_asignada ?? data.zona ?? data.area ?? localFallback?.zona ?? "Sin zona",
         rol: (data.rol ?? localFallback?.rol ?? "camarero").toLowerCase(),
+        activo: data.activo !== undefined ? Boolean(data.activo) : true,
         email: normalized
       };
     }
@@ -771,6 +945,8 @@
       document.getElementById("mainApp").classList.remove("hidden");
 
       const esEncargadoZona = isZoneManagerRole(user.rol);
+      document.getElementById("appShell").classList.toggle("wide-mode", esEncargadoZona);
+
       const etiquetaRol = esEncargadoZona
         ? "Encargado de zona"
         : (user.rol === "encargado" || user.rol === "encargados")
@@ -785,12 +961,13 @@
       await loadExistingAvailabilityForUser(user);
 
       if (esEncargadoZona) {
+        document.getElementById("encZoneBadge").textContent = `Zona: ${user.zona}`;
         document.getElementById("encZoneSubtitle").textContent =
-          `Zona ${user.zona}: asigna barra y hora de entrada (cada 15 min) al personal disponible.`;
+          `Zona ${user.zona} · Orden: Almacén, Bajas, Entreplantas y Altas. Selecciona encargados y camareros por puesto.`;
         roleTabs.classList.add("hidden");
         document.getElementById("viewEmp").classList.add("hidden");
         document.getElementById("viewEnc").classList.remove("hidden");
-        renderEncargadoList();
+        renderZoneWorkspace();
       } else {
         roleTabs.classList.add("hidden");
         document.getElementById("viewEnc").classList.add("hidden");
@@ -814,9 +991,9 @@
         .maybeSingle();
 
       if (data) {
-        state.availabilities[user.ficha] = {
+        state.availabilities[String(user.id)] = {
           convocatoriaId: data.id,
-          empleadoId: data.empleado_id,
+          empleadoId: String(user.id),
           ficha: user.ficha,
           nombre: user.nombre,
           zona: user.zona,
@@ -824,7 +1001,7 @@
           margen: data.margen_horas || (data.disponible ? "5 horas" : "No disponible"),
           barraAsignada: data.barra_asignada || "",
           horaEntrada: data.hora_entrada || "19:30",
-          actualizado: "Guardado en BD"
+          puestoRol: data.puesto_rol || "camarero"
         };
       }
     }
@@ -837,8 +1014,8 @@
 
       if (error) {
         state.availabilities = {};
-        document.getElementById("encList").innerHTML =
-          `<div style="font-size:13px;color:var(--bad);padding:10px 0;">Error cargando convocatorias: ${error.message}</div>`;
+        document.getElementById("respondedTableWrap").innerHTML =
+          `<div style="font-size:12px;color:var(--bad);padding:8px 0;">Error cargando convocatorias: ${error.message}</div>`;
         return;
       }
 
@@ -848,34 +1025,35 @@
 
       if (empError) {
         state.availabilities = {};
-        document.getElementById("encList").innerHTML =
-          `<div style="font-size:13px;color:var(--bad);padding:10px 0;">Error cargando empleados: ${empError.message}</div>`;
+        document.getElementById("respondedTableWrap").innerHTML =
+          `<div style="font-size:12px;color:var(--bad);padding:8px 0;">Error cargando empleados: ${empError.message}</div>`;
         return;
       }
 
+      const mappedEmployees = (emps && emps.length)
+        ? emps.map((e) => mapEmployeeRow(e, e.email))
+        : STAFF;
+
+      state.allEmployees = mappedEmployees;
+
       const byId = new Map();
-      (emps || []).forEach((e) => {
+      mappedEmployees.forEach((e) => {
         if (e.id) byId.set(String(e.id), e);
       });
 
       const merged = {};
+      const configs = {};
+
       (convs || []).forEach((row) => {
-        const empDb = byId.get(String(row.empleado_id));
-        const fallback = STAFF.find(
-          (s) => empDb?.email && s.email.toLowerCase() === empDb.email.toLowerCase()
-        );
+        const empIdStr = String(row.empleado_id);
+        const empDb = byId.get(empIdStr);
+        const ficha = String(empDb?.ficha ?? empIdStr);
+        const nombre = empDb?.nombre ?? "Empleado";
+        const zona = empDb?.zona ?? "Sin zona";
 
-        const ficha = String(
-          empDb?.numero_ficha ?? empDb?.ficha ?? empDb?.codigo_empleado ?? fallback?.ficha ?? row.empleado_id ?? "—"
-        );
-        const nombre =
-          empDb?.nombre_mostrar ?? empDb?.nombre ?? empDb?.nombre_completo ?? fallback?.nombre ?? "Empleado";
-        const zona =
-          empDb?.zona_asignada ?? empDb?.zona ?? empDb?.area ?? fallback?.zona ?? "Sin zona";
-
-        merged[ficha] = {
+        const record = {
           convocatoriaId: row.id,
-          empleadoId: row.empleado_id,
+          empleadoId: empIdStr,
           ficha,
           nombre,
           zona,
@@ -883,45 +1061,43 @@
           margen: row.margen_horas || (row.disponible ? "5 horas" : "No disponible"),
           barraAsignada: row.barra_asignada || "",
           horaEntrada: row.hora_entrada || "19:30",
-          actualizado: "Guardado en BD"
+          puestoRol: (row.puesto_rol || "camarero").toLowerCase()
         };
+
+        merged[empIdStr] = record;
+
+        if (record.disponible && record.barraAsignada) {
+          if (!configs[record.barraAsignada]) {
+            configs[record.barraAsignada] = { encCount: 0, camCount: 0, slots: [] };
+          }
+          const isEncSlot = record.puestoRol === "encargado" || record.puestoRol === "encargado_zona";
+          if (isEncSlot) {
+            configs[record.barraAsignada].encCount += 1;
+          } else {
+            configs[record.barraAsignada].camCount += 1;
+          }
+          configs[record.barraAsignada].slots.push({
+            rol: isEncSlot ? "encargado" : "camarero",
+            empleadoId: empIdStr,
+            hora: record.horaEntrada || "19:30"
+          });
+        }
       });
 
       state.availabilities = merged;
+      state.postConfigs = configs;
     }
 
     function logoutUser() {
       state.currentUser = null;
       state.availabilities = {};
+      state.postConfigs = {};
+      document.getElementById("appShell").classList.remove("wide-mode");
       document.getElementById("loginPassword").value = "";
       document.getElementById("loginMsg").className = "status-banner";
       sbClient.auth.signOut().catch(() => {});
       document.getElementById("mainApp").classList.add("hidden");
       document.getElementById("loginCard").classList.remove("hidden");
-    }
-
-    async function switchTab(tab) {
-      const esEncargadoZona = isZoneManagerRole(state.currentUser?.rol);
-      if (esEncargadoZona) {
-        document.getElementById("roleTabs").classList.add("hidden");
-        document.getElementById("viewEmp").classList.add("hidden");
-        document.getElementById("viewEnc").classList.remove("hidden");
-        await loadAllAvailabilitiesForManager();
-        renderEncargadoList();
-        return;
-      }
-
-      const isEmp = tab === "emp";
-      document.getElementById("tabEmp").classList.toggle("active", isEmp);
-      document.getElementById("tabEnc").classList.toggle("active", !isEmp);
-      document.getElementById("viewEmp").classList.toggle("hidden", !isEmp);
-      document.getElementById("viewEnc").classList.toggle("hidden", isEmp);
-      if (!isEmp) {
-        if (state.currentUser && (state.currentUser.rol === "encargado" || state.currentUser.rol === "encargados" || state.currentUser.rol === "admin")) {
-          await loadAllAvailabilitiesForManager();
-        }
-        renderEncargadoList();
-      }
     }
 
     function loadEmployeeFicha(user) {
@@ -930,7 +1106,7 @@
       document.getElementById("empFichaBadge").textContent = `Ficha #${user.ficha}`;
       document.getElementById("empMsg").className = "status-banner";
 
-      const prev = state.availabilities[user.ficha];
+      const prev = user.id ? state.availabilities[String(user.id)] : null;
       state.draftAvailable = prev ? prev.disponible : null;
       state.draftMargin = prev && prev.margen && prev.margen !== "No disponible" ? prev.margen : "5 horas";
 
@@ -968,18 +1144,20 @@
         return;
       }
 
-      const prev = state.availabilities[user.ficha] || {};
+      const prev = user.id ? state.availabilities[String(user.id)] : null;
       const payload = {
-        ...prev,
+        ...(prev || {}),
+        empleadoId: user.id ? String(user.id) : "",
         ficha: user.ficha,
         nombre: user.nombre,
         zona: user.zona,
         disponible: state.draftAvailable,
-        margen: state.draftAvailable ? state.draftMargin : "No disponible",
-        actualizado: new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })
+        margen: state.draftAvailable ? state.draftMargin : "No disponible"
       };
 
-      state.availabilities[user.ficha] = payload;
+      if (user.id) {
+        state.availabilities[String(user.id)] = payload;
+      }
 
       const dbRow = {
         partido_id: "LFP27.15",
@@ -995,114 +1173,287 @@
         .upsert(dbRow, { onConflict: "partido_id,empleado_id" });
 
       if (error) {
-        showBanner("empMsg", `Guardado local; Supabase devolvió: ${error.message}`, "warn");
-        renderEncargadoList();
+        showBanner("empMsg", `Error al guardar en Supabase: ${error.message}`, "err");
         return;
       }
 
       showBanner("empMsg", `Ficha de ${user.nombre} (#${user.ficha}) guardada como ${payload.disponible ? "DISPONIBLE (" + payload.margen + ")" : "NO DISPONIBLE"}.`, "ok");
-      renderEncargadoList();
     }
 
-    async function saveAssignmentForEmployee(ficha) {
-      const item = state.availabilities[ficha];
-      if (!item) return;
+    function togglePendingList() {
+      state.pendingCollapsed = !state.pendingCollapsed;
+      renderPendingSection();
+    }
 
-      const safeId = ficha.replace(/[^a-zA-Z0-9_-]/g, "_");
-      const barraSelect = document.getElementById(`barra_${safeId}`);
-      const horaSelect = document.getElementById(`hora_${safeId}`);
-      const barraAsignada = barraSelect ? barraSelect.value : "";
-      const horaEntrada = horaSelect ? horaSelect.value : "";
+    function getAvailableEmployees() {
+      return Object.values(state.availabilities).filter((item) => item.disponible);
+    }
 
-      if (!barraAsignada) {
-        showBanner("encMsg", `Selecciona una barra para ${item.nombre}.`, "warn");
+    function getAssignedEmployeeIds(excludeBarra = null, excludeSlotIndex = -1) {
+      const assigned = new Set();
+      Object.entries(state.postConfigs).forEach(([barra, cfg]) => {
+        (cfg.slots || []).forEach((sl, idx) => {
+          if (barra === excludeBarra && idx === excludeSlotIndex) return;
+          if (sl.empleadoId) assigned.add(String(sl.empleadoId));
+        });
+      });
+      return assigned;
+    }
+
+    function renderRespondedTable() {
+      const wrap = document.getElementById("respondedTableWrap");
+      const responded = Object.values(state.availabilities);
+      const disponibles = responded.filter((r) => r.disponible);
+      document.getElementById("encCount").textContent = `${disponibles.length} disponibles`;
+
+      if (!responded.length) {
+        wrap.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:8px 0;">Nadie ha comunicado disponibilidad aún para LFP27.15.</div>`;
         return;
       }
 
-      const allowedBars = getBarsForZone(state.currentUser?.zona);
-      const isAllowed = allowedBars.some((b) => b.barra === barraAsignada);
-      if (!isAllowed) {
-        showBanner("encMsg", `Solo puedes asignar barras de la zona ${state.currentUser?.zona}.`, "err");
+      const rowsHtml = responded.map((r) => {
+        const estadoPill = r.disponible
+          ? `<span class="pill-mini pill-ok">Sí · ${r.margen}</span>`
+          : `<span class="pill-mini pill-no">No disp.</span>`;
+        const puestoTxt = r.disponible
+          ? (r.barraAsignada ? `<strong>${r.barraAsignada}</strong> (${r.horaEntrada || "—"})` : `<span style="color:var(--muted);">Sin asignar</span>`)
+          : `<span style="color:var(--muted);">—</span>`;
+
+        return `
+          <tr>
+            <td>
+              <strong>${r.nombre}</strong>
+              <div style="font-size:11px;color:var(--muted);">#${r.ficha} · ${r.zona}</div>
+            </td>
+            <td>${estadoPill}</td>
+            <td>${puestoTxt}</td>
+          </tr>
+        `;
+      }).join("");
+
+      wrap.innerHTML = `
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Empleado</th>
+              <th>Estado</th>
+              <th>Puesto</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      `;
+    }
+
+    function renderPendingSection() {
+      const body = document.getElementById("pendingListBody");
+      const btn = document.getElementById("togglePendingBtn");
+      const badge = document.getElementById("pendingCountBadge");
+
+      // Excluimos encargados de zona de la lista de pendientes de disponibilidad
+      const respondedIds = new Set(Object.keys(state.availabilities));
+      const pending = (state.allEmployees || []).filter((emp) => {
+        if (isZoneManagerRole(emp.rol)) return false;
+        if (!emp.id) return false;
+        return !respondedIds.has(String(emp.id));
+      });
+
+      badge.textContent = `${pending.length}`;
+      btn.textContent = state.pendingCollapsed ? "Desplegar" : "Minimizar";
+
+      if (state.pendingCollapsed) {
+        body.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:4px 0;">Lista minimizada (${pending.length} pendientes).</div>`;
+        return;
+      }
+
+      if (!pending.length) {
+        body.innerHTML = `<div style="font-size:12px;color:var(--ok);padding:4px 0;">Todo el personal ha respondido ya.</div>`;
+        return;
+      }
+
+      body.innerHTML = pending.map((p) => `
+        <div class="pending-row">
+          <div>
+            <strong>${p.nombre}</strong>
+            <span style="color:var(--muted);font-size:11px;">(#${p.ficha} · ${p.zona})</span>
+          </div>
+          <span class="pill-mini pill-pend">Pendiente</span>
+        </div>
+      `).join("");
+    }
+
+    function ensurePostConfig(barra) {
+      if (!state.postConfigs[barra]) {
+        state.postConfigs[barra] = { encCount: 0, camCount: 0, slots: [] };
+      }
+      return state.postConfigs[barra];
+    }
+
+    function rebuildSlotsForPost(barra, newEncCount, newCamCount) {
+      const cfg = ensurePostConfig(barra);
+      const safeEnc = Math.max(0, Math.min(10, parseInt(newEncCount, 10) || 0));
+      const safeCam = Math.max(0, Math.min(20, parseInt(newCamCount, 10) || 0));
+
+      const existingEnc = (cfg.slots || []).filter((s) => s.rol === "encargado");
+      const existingCam = (cfg.slots || []).filter((s) => s.rol !== "encargado");
+
+      const nextSlots = [];
+      for (let i = 0; i < safeEnc; i++) {
+        nextSlots.push(existingEnc[i] || { rol: "encargado", empleadoId: "", hora: "19:30" });
+      }
+      for (let i = 0; i < safeCam; i++) {
+        nextSlots.push(existingCam[i] || { rol: "camarero", empleadoId: "", hora: "20:00" });
+      }
+
+      cfg.encCount = safeEnc;
+      cfg.camCount = safeCam;
+      cfg.slots = nextSlots;
+    }
+
+    function onHeadcountChange(barra, type, value) {
+      const cfg = ensurePostConfig(barra);
+      if (type === "enc") {
+        rebuildSlotsForPost(barra, value, cfg.camCount);
+      } else {
+        rebuildSlotsForPost(barra, cfg.encCount, value);
+      }
+      renderPostsAssembly();
+    }
+
+    function onSlotEmployeeChange(barra, slotIndex, empleadoId) {
+      const cfg = ensurePostConfig(barra);
+      if (!cfg.slots[slotIndex]) return;
+      cfg.slots[slotIndex].empleadoId = empleadoId;
+      renderPostsAssembly();
+    }
+
+    function onSlotHourChange(barra, slotIndex, hora) {
+      const cfg = ensurePostConfig(barra);
+      if (!cfg.slots[slotIndex]) return;
+      cfg.slots[slotIndex].hora = hora;
+    }
+
+    async function savePostSlot(barra, slotIndex) {
+      const cfg = ensurePostConfig(barra);
+      const slot = cfg.slots[slotIndex];
+      if (!slot) return;
+
+      if (!slot.empleadoId) {
+        showBanner("encMsg", `Selecciona una persona disponible para el hueco ${slotIndex + 1} de ${barra}.`, "warn");
+        return;
+      }
+
+      const empRecord = state.availabilities[String(slot.empleadoId)];
+      if (!empRecord) {
+        showBanner("encMsg", "No se encontró el registro de disponibilidad del empleado seleccionado.", "err");
         return;
       }
 
       const { error } = await sbClient
         .from("convocatorias")
         .update({
-          barra_asignada: barraAsignada,
-          hora_entrada: horaEntrada
+          barra_asignada: barra,
+          hora_entrada: slot.hora,
+          puesto_rol: slot.rol
         })
         .eq("partido_id", "LFP27.15")
-        .eq("empleado_id", item.empleadoId);
+        .eq("empleado_id", empRecord.empleadoId);
 
       if (error) {
-        showBanner("encMsg", `Error guardando asignación de ${item.nombre}: ${error.message}`, "err");
+        showBanner("encMsg", `Error guardando en ${barra}: ${error.message}`, "err");
         return;
       }
 
-      item.barraAsignada = barraAsignada;
-      item.horaEntrada = horaEntrada;
-      item.actualizado = `Asignado ${new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}`;
-      showBanner("encMsg", `Asignación guardada: ${item.nombre} -> ${barraAsignada} a las ${horaEntrada}.`, "ok");
-      renderEncargadoList();
+      empRecord.barraAsignada = barra;
+      empRecord.horaEntrada = slot.hora;
+      empRecord.puestoRol = slot.rol;
+
+      showBanner("encMsg", `Guardado: ${empRecord.nombre} en ${barra} (${slot.rol}) a las ${slot.hora}.`, "ok");
+      renderRespondedTable();
     }
 
-    function renderEncargadoList() {
-      const listEl = document.getElementById("encList");
-      const allItems = Object.values(state.availabilities);
-      const disponibles = allItems.filter((i) => i.disponible);
-      document.getElementById("encCount").textContent = `${disponibles.length} disponibles`;
+    function renderPostsAssembly() {
+      const container = document.getElementById("postsAssemblyList");
+      const posts = getPostsForZone(state.currentUser?.zona);
+      const disponibles = getAvailableEmployees();
 
-      if (!disponibles.length) {
-        listEl.innerHTML = `<div style="font-size:13px;color:var(--muted);padding:10px 0;">Aún no hay personal disponible guardado para LFP27.15.</div>`;
+      if (!posts.length) {
+        container.innerHTML = `<div style="font-size:13px;color:var(--muted);padding:10px 0;">No hay puestos configurados para esta zona.</div>`;
         return;
       }
 
-      const allowedBars = getBarsForZone(state.currentUser?.zona);
+      container.innerHTML = posts.map((post, pIdx) => {
+        const cfg = ensurePostConfig(post.barra);
+        const safePostId = post.id;
 
-      listEl.innerHTML = disponibles.map((it) => {
-        const safeId = it.ficha.replace(/[^a-zA-Z0-9_-]/g, "_");
-        const barOptions = [
-          `<option value="">-- Seleccionar barra (${state.currentUser?.zona || "Zona"}) --</option>`,
-          ...allowedBars.map((b) => {
-            const label = `${b.barra} · ${b.planta} (${b.antigua})`;
-            const selected = it.barraAsignada === b.barra ? "selected" : "";
-            return `<option value="${b.barra}" ${selected}>${label}</option>`;
-          })
-        ].join("");
+        const slotsHtml = (cfg.slots || []).map((sl, sIdx) => {
+          const takenElsewhere = getAssignedEmployeeIds(post.barra, sIdx);
+          const candidatePool = disponibles.filter(
+            (d) => !takenElsewhere.has(String(d.empleadoId)) || String(d.empleadoId) === String(sl.empleadoId)
+          );
 
-        const hourOptions = TIME_SLOTS.map((slot) => {
-          const selected = it.horaEntrada === slot ? "selected" : "";
-          return `<option value="${slot}" ${selected}>${slot}</option>`;
+          const empOptions = [
+            `<option value="">-- Elegir disponible (${sl.rol}) --</option>`,
+            ...candidatePool.map((d) => {
+              const selected = String(sl.empleadoId) === String(d.empleadoId) ? "selected" : "";
+              return `<option value="${d.empleadoId}" ${selected}>${d.nombre} (#${d.ficha} · ${d.margen})</option>`;
+            })
+          ].join("");
+
+          const hourOptions = TIME_SLOTS.map((t) => {
+            const selected = sl.hora === t ? "selected" : "";
+            return `<option value="${t}" ${selected}>${t}</option>`;
+          }).join("");
+
+          const roleLabel = sl.rol === "encargado" ? "Encargado" : "Camarero";
+          const roleClass = sl.rol === "encargado" ? "slot-role-tag" : "slot-role-tag camarero";
+
+          return `
+            <div class="slot-row">
+              <span class="${roleClass}">${roleLabel} #${sIdx + 1}</span>
+              <select onchange="onSlotEmployeeChange('${post.barra}', ${sIdx}, this.value)">
+                ${empOptions}
+              </select>
+              <select onchange="onSlotHourChange('${post.barra}', ${sIdx}, this.value)">
+                ${hourOptions}
+              </select>
+              <button class="save-slot-btn" type="button" onclick="savePostSlot('${post.barra}', ${sIdx})">Guardar</button>
+            </div>
+          `;
         }).join("");
 
         return `
-          <div class="assign-card">
-            <div class="assign-header">
-              <div>
-                <strong>${it.nombre}</strong>
-                <span style="color:var(--muted);font-size:12px;">(#${it.ficha} · ${it.zona})</span>
-                <div style="font-size:12px;color:var(--muted);">
-                  Margen: ${it.margen} · ${it.barraAsignada ? `<strong>${it.barraAsignada}</strong> · Entrada <strong>${it.horaEntrada}</strong>` : "Sin barra asignada"}
+          <div class="post-card" id="post_${safePostId}">
+            <div class="post-top">
+              <div class="post-title-wrap">
+                <strong>${post.barra}</strong>
+                <small>${post.categoria} · Planta ${post.planta} (${post.antigua})</small>
+              </div>
+
+              <div class="headcount-controls">
+                <div class="hc-box">
+                  <span>Encargados</span>
+                  <input type="number" min="0" max="10" value="${cfg.encCount}"
+                    onchange="onHeadcountChange('${post.barra}', 'enc', this.value)" />
+                </div>
+                <div class="hc-box">
+                  <span>Camareros</span>
+                  <input type="number" min="0" max="20" value="${cfg.camCount}"
+                    onchange="onHeadcountChange('${post.barra}', 'cam', this.value)" />
                 </div>
               </div>
-              <span class="pill-mini pill-ok">Disponible</span>
             </div>
 
-            <div class="assign-grid">
-              <div>
-                <label for="barra_${safeId}">Barra (${state.currentUser?.zona || "Zona"})</label>
-                <select id="barra_${safeId}">${barOptions}</select>
-              </div>
-              <div>
-                <label for="hora_${safeId}">Hora entrada</label>
-                <select id="hora_${safeId}">${hourOptions}</select>
-              </div>
-              <button class="save-mini-btn" type="button" onclick="saveAssignmentForEmployee('${it.ficha}')">Guardar</button>
-            </div>
+            ${slotsHtml ? `<div class="slots-container">${slotsHtml}</div>` : ""}
           </div>
         `;
       }).join("");
+    }
+
+    function renderZoneWorkspace() {
+      renderRespondedTable();
+      renderPendingSection();
+      renderPostsAssembly();
     }
 
     init();
