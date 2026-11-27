@@ -47,7 +47,7 @@
     }
 
     .app-shell.wide-mode {
-      max-width: 1180px;
+      max-width: 1240px;
     }
 
     .card {
@@ -156,7 +156,7 @@
 
     .tabs {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(3, 1fr);
       gap: 8px;
       background: #eef0f3;
       padding: 4px;
@@ -435,6 +435,10 @@
       border-bottom: 2px solid var(--border);
     }
 
+    .final-sheet-table th.num-col {
+      text-align: center;
+    }
+
     .final-sheet-table td {
       padding: 10px 10px;
       border-bottom: 1px solid #e5e7eb;
@@ -451,8 +455,59 @@
       font-size: 13px;
     }
 
+    .sign-sheet-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      min-width: 960px;
+    }
+
+    .sign-sheet-table th {
+      text-align: left;
+      background: #f9fafb;
+      color: #374151;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 9px 7px;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .sign-sheet-table th.center-col {
+      text-align: center;
+    }
+
+    .sign-sheet-table td {
+      padding: 9px 7px;
+      border-bottom: 1px solid #d1d5db;
+      vertical-align: middle;
+    }
+
+    .center-col {
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .write-box {
+      display: inline-block;
+      min-width: 66px;
+      height: 26px;
+      border: 1.5px solid #9ca3af;
+      border-radius: 6px;
+      background: #fff;
+    }
+
+    .sign-box {
+      display: inline-block;
+      width: 135px;
+      height: 28px;
+      border: 1.5px solid #9ca3af;
+      border-radius: 6px;
+      background: #fff;
+    }
+
     .num-col {
-      text-align: right;
+      text-align: center;
       font-variant-numeric: tabular-nums;
     }
 
@@ -582,6 +637,12 @@
         box-shadow: none;
         border: 1px solid #d1d5db;
       }
+      .table-scroll {
+        overflow: visible;
+      }
+      .sign-sheet-table {
+        min-width: 100%;
+      }
     }
   </style>
 </head>
@@ -652,6 +713,7 @@
       <div id="zoneModeTabs" class="tabs hidden no-print" style="margin-top: 10px;">
         <button id="tabMontar" class="tab-btn active" type="button" onclick="switchZoneView('montar')">Montar convocatoria</button>
         <button id="tabConvocatoria" class="tab-btn" type="button" onclick="switchZoneView('convocatoria')">Convocatoria final</button>
+        <button id="tabFirma" class="tab-btn" type="button" onclick="switchZoneView('firma')">Hoja de firma</button>
       </div>
 
       <div id="viewEmp" class="card" style="margin-top: 10px;">
@@ -727,9 +789,6 @@
           <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
             <div>
               <h2 style="margin: 0; font-size: 17px;">Convocatoria asignada · <span id="finalSheetZoneLabel">Preferencia</span></h2>
-              <p id="finalSheetSubtitle" style="margin: 3px 0 0; font-size: 12px; color: var(--muted);">
-                Hora de salida calculada como hora del partido + 2 horas (<strong id="finalExitRef">23:00</strong>).
-              </p>
             </div>
             <div style="display: flex; align-items: center; gap: 8px;" class="no-print">
               <span id="finalAssignedCountBadge" class="pill-mini pill-ok">0 asignados</span>
@@ -738,6 +797,20 @@
           </div>
 
           <div id="finalSheetTableWrap"></div>
+        </div>
+
+        <div id="viewSignSheet" class="card hidden">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div>
+              <h2 style="margin: 0; font-size: 17px;">Hoja de firma · <span id="signSheetZoneLabel">Preferencia</span></h2>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;" class="no-print">
+              <span id="signAssignedCountBadge" class="pill-mini pill-ok">0 asignados</span>
+              <button class="mini-toggle-btn" type="button" onclick="window.print()">Imprimir / PDF</button>
+            </div>
+          </div>
+
+          <div id="signSheetTableWrap"></div>
         </div>
       </div>
     </div>
@@ -951,7 +1024,6 @@
     }
 
     function applyMatchHeaderTexts() {
-      const horaSalidaRef = addHoursToHHMM(MATCH_INFO.horaInicio, 2);
       document.title = `Disponibilidad Sevilla FC · ${MATCH_INFO.partido}`;
       document.getElementById("matchTitleText").textContent = MATCH_INFO.partido;
       document.getElementById("matchCodeBadge").textContent = MATCH_INFO.codigo;
@@ -959,9 +1031,6 @@
       document.getElementById("empQuestionLabel").textContent = `¿Estás disponible para el ${MATCH_INFO.partido}?`;
       document.getElementById("respondedMatchSubtitle").textContent =
         `Personal que ya ha indicado su respuesta para el ${MATCH_INFO.partido}.`;
-      document.getElementById("finalExitRef").textContent = horaSalidaRef;
-      document.getElementById("finalSheetSubtitle").innerHTML =
-        `Hora de salida = hora del partido + 2h (<strong>${horaSalidaRef}</strong>) · Tarifas/h: Camarero <strong>${formatCurrencyEUR(TARIFAS_HORA.camarero)}</strong> · Encargado <strong>${formatCurrencyEUR(TARIFAS_HORA.encargado)}</strong> · Enc. zona <strong>${formatCurrencyEUR(TARIFAS_HORA.encargado_zona)}</strong>.`;
     }
 
     function init() {
@@ -1117,16 +1186,30 @@
     }
 
     function switchZoneView(viewName) {
-      state.zoneSubView = viewName === "convocatoria" ? "convocatoria" : "montar";
-      const isFinal = state.zoneSubView === "convocatoria";
+      if (viewName === "convocatoria") {
+        state.zoneSubView = "convocatoria";
+      } else if (viewName === "firma") {
+        state.zoneSubView = "firma";
+      } else {
+        state.zoneSubView = "montar";
+      }
 
-      document.getElementById("tabMontar").classList.toggle("active", !isFinal);
+      const isFinal = state.zoneSubView === "convocatoria";
+      const isSign = state.zoneSubView === "firma";
+      const isMontar = state.zoneSubView === "montar";
+
+      document.getElementById("tabMontar").classList.toggle("active", isMontar);
       document.getElementById("tabConvocatoria").classList.toggle("active", isFinal);
-      document.getElementById("viewAssembly").classList.toggle("hidden", isFinal);
+      document.getElementById("tabFirma").classList.toggle("active", isSign);
+
+      document.getElementById("viewAssembly").classList.toggle("hidden", !isMontar);
       document.getElementById("viewFinalSheet").classList.toggle("hidden", !isFinal);
+      document.getElementById("viewSignSheet").classList.toggle("hidden", !isSign);
 
       if (isFinal) {
         renderFinalConvocatoriaSheet();
+      } else if (isSign) {
+        renderSignSheet();
       } else {
         renderZoneWorkspace();
       }
@@ -1157,6 +1240,7 @@
         document.getElementById("viewEnc").classList.remove("hidden");
         document.getElementById("encZoneBadge").textContent = `Zona: ${user.zona}`;
         document.getElementById("finalSheetZoneLabel").textContent = user.zona;
+        document.getElementById("signSheetZoneLabel").textContent = user.zona;
         document.getElementById("encZoneSubtitle").textContent =
           `Zona ${user.zona} · Orden: Almacén, Bajas, Entreplantas y Altas. Selecciona encargados y camareros por puesto.`;
         switchZoneView(state.zoneSubView);
@@ -1648,15 +1732,11 @@
       }).join("");
     }
 
-    function renderFinalConvocatoriaSheet() {
-      const wrap = document.getElementById("finalSheetTableWrap");
-      const badge = document.getElementById("finalAssignedCountBadge");
+    function getOrderedAssignedRows() {
       const posts = getPostsForZone(state.currentUser?.zona);
       const postOrderMap = new Map(posts.map((p, idx) => [p.barra, idx]));
 
-      const horaSalida = addHoursToHHMM(MATCH_INFO.horaInicio, 2);
-
-      const assignedRows = Object.values(state.availabilities)
+      return Object.values(state.availabilities)
         .filter((item) => item.disponible && item.barraAsignada)
         .filter((item) => {
           const zUser = String(state.currentUser?.zona || "").trim().toLowerCase();
@@ -1672,6 +1752,13 @@
           if (ra !== rb) return ra - rb;
           return a.nombre.localeCompare(b.nombre, "es");
         });
+    }
+
+    function renderFinalConvocatoriaSheet() {
+      const wrap = document.getElementById("finalSheetTableWrap");
+      const badge = document.getElementById("finalAssignedCountBadge");
+      const horaSalida = addHoursToHHMM(MATCH_INFO.horaInicio, 2);
+      const assignedRows = getOrderedAssignedRows();
 
       badge.textContent = `${assignedRows.length} asignados`;
 
@@ -1704,10 +1791,7 @@
           <tr>
             <td><strong>${row.barraAsignada}</strong></td>
             <td>${row.nombre}</td>
-            <td>
-              <span class="pill-mini ${pillClass}">${puestoTexto}</span>
-              <span style="font-size:11px;color:var(--muted);margin-left:4px;">(${formatCurrencyEUR(tarifaHora)}/h)</span>
-            </td>
+            <td><span class="pill-mini ${pillClass}">${puestoTexto}</span></td>
             <td><strong>${horaEntradaTexto}</strong></td>
             <td><strong>${horaSalida}</strong></td>
             <td class="num-col"><strong>${formatHours(totalHorasPersona)}</strong></td>
@@ -1738,6 +1822,70 @@
                 <td class="num-col">${formatCurrencyEUR(totalCosteGeneral)}</td>
               </tr>
             </tfoot>
+          </table>
+        </div>
+      `;
+    }
+
+    function renderSignSheet() {
+      const wrap = document.getElementById("signSheetTableWrap");
+      const badge = document.getElementById("signAssignedCountBadge");
+      const horaSalida = addHoursToHHMM(MATCH_INFO.horaInicio, 2);
+      const assignedRows = getOrderedAssignedRows();
+
+      badge.textContent = `${assignedRows.length} asignados`;
+
+      if (!assignedRows.length) {
+        wrap.innerHTML = `<div style="font-size:13px;color:var(--muted);padding:14px 0;">Aún no hay empleados asignados a ningún puesto para ${MATCH_INFO.partido}.</div>`;
+        return;
+      }
+
+      const bodyHtml = assignedRows.map((row) => {
+        const roleKey = normalizeRoleKey(row.puestoRol);
+        const puestoTexto = getRoleDisplayName(roleKey);
+        const horaEntradaTexto = normalizeHHMM(row.horaEntrada, "—");
+        const totalHorasPersona = computeShiftHours(horaEntradaTexto, horaSalida);
+
+        const pillClass = roleKey === "encargado_zona"
+          ? "pill-zone"
+          : roleKey === "encargado"
+            ? ""
+            : "pill-ok";
+
+        return `
+          <tr>
+            <td><strong>${row.barraAsignada}</strong></td>
+            <td>${row.nombre}</td>
+            <td><span class="pill-mini ${pillClass}">${puestoTexto}</span></td>
+            <td class="center-col"><strong>${horaEntradaTexto}</strong></td>
+            <td class="center-col"><span class="write-box"></span></td>
+            <td class="center-col"><strong>${horaSalida}</strong></td>
+            <td class="center-col"><span class="write-box"></span></td>
+            <td class="center-col"><strong>${formatHours(totalHorasPersona)}</strong></td>
+            <td class="center-col"><span class="write-box"></span></td>
+            <td class="center-col"><span class="sign-box"></span></td>
+          </tr>
+        `;
+      }).join("");
+
+      wrap.innerHTML = `
+        <div class="table-scroll">
+          <table class="sign-sheet-table">
+            <thead>
+              <tr>
+                <th>Ubicación</th>
+                <th>Persona</th>
+                <th>Puesto</th>
+                <th class="center-col">Hora entrada</th>
+                <th class="center-col">Nueva entrada</th>
+                <th class="center-col">Hora salida</th>
+                <th class="center-col">Nueva salida</th>
+                <th class="center-col">Total horas</th>
+                <th class="center-col">Nuevo total</th>
+                <th class="center-col">Firma</th>
+              </tr>
+            </thead>
+            <tbody>${bodyHtml}</tbody>
           </table>
         </div>
       `;
