@@ -1,61 +1,775 @@
-function isZoneManagerRole(rol) {
-  const r = String(rol || "").trim().toLowerCase();
-  return r === "encargado_zona" || r === "encargado de zona" || r === "admin";
-}
-
-async function openAppForUser(user) {
-  state.currentUser = user;
-  document.getElementById("loginCard").classList.add("hidden");
-  document.getElementById("mainApp").classList.remove("hidden");
-
-  const esEncargadoZona = isZoneManagerRole(user.rol);
-  const etiquetaRol = esEncargadoZona
-    ? "Encargado de zona"
-    : (user.rol === "encargado" || user.rol === "encargados")
-      ? "Encargado"
-      : "Camarero";
-
-  document.getElementById("sessionUserTitle").textContent = user.nombre;
-  document.getElementById("sessionUserMeta").textContent = `Ficha #${user.ficha} · ${user.zona} · ${etiquetaRol}`;
-
-  const roleTabs = document.getElementById("roleTabs");
-
-  await loadExistingAvailabilityForUser(user);
-
-  if (esEncargadoZona) {
-    // El encargado de zona solo consulta disponibilidades: ocultamos pestañas y su ficha personal
-    roleTabs.classList.add("hidden");
-    document.getElementById("viewEmp").classList.add("hidden");
-    document.getElementById("viewEnc").classList.remove("hidden");
-    renderEncargadoList();
-  } else {
-    roleTabs.classList.add("hidden");
-    document.getElementById("viewEnc").classList.add("hidden");
-    document.getElementById("viewEmp").classList.remove("hidden");
-    loadEmployeeFicha(user);
-  }
-}
-
-async function switchTab(tab) {
-  const esEncargadoZona = isZoneManagerRole(state.currentUser?.rol);
-  if (esEncargadoZona) {
-    document.getElementById("roleTabs").classList.add("hidden");
-    document.getElementById("viewEmp").classList.add("hidden");
-    document.getElementById("viewEnc").classList.remove("hidden");
-    await loadAllAvailabilitiesForManager();
-    renderEncargadoList();
-    return;
-  }
-
-  const isEmp = tab === "emp";
-  document.getElementById("tabEmp").classList.toggle("active", isEmp);
-  document.getElementById("tabEnc").classList.toggle("active", !isEmp);
-  document.getElementById("viewEmp").classList.toggle("hidden", !isEmp);
-  document.getElementById("viewEnc").classList.toggle("hidden", isEmp);
-  if (!isEmp) {
-    if (state.currentUser && (state.currentUser.rol === "encargado" || state.currentUser.rol === "admin")) {
-      await loadAllAvailabilitiesForManager();
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Disponibilidad Sevilla FC · LFP27.15</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg: #f3f4f6;
+      --card: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --sfc: #d50032;
+      --sfc-dark: #9e0024;
+      --sfc-soft: #fff1f4;
+      --ok: #059669;
+      --ok-soft: #ecfdf5;
+      --warn: #d97706;
+      --warn-soft: #fffbeb;
+      --bad: #dc2626;
+      --bad-soft: #fef2f2;
+      --radius: 16px;
     }
-    renderEncargadoList();
-  }
-}
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      background: linear-gradient(180deg, #e5e7eb 0%, var(--bg) 220px);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 16px 12px 40px;
+    }
+
+    .app-shell {
+      width: 100%;
+      max-width: 440px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: 0 4px 18px rgba(17, 24, 39, 0.05);
+    }
+
+    .header-sfc {
+      background: linear-gradient(135deg, var(--sfc) 0%, var(--sfc-dark) 100%);
+      color: #fff;
+      border: none;
+      padding: 18px;
+    }
+
+    .top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.18);
+    }
+
+    .badge-confirmado {
+      background: #dcfce7;
+      color: #065f46;
+    }
+
+    .badge-estimado {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.25;
+      font-weight: 800;
+    }
+
+    .sub {
+      margin: 4px 0 0;
+      font-size: 13px;
+      opacity: 0.92;
+    }
+
+    .match-box {
+      background: #f9fafb;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      margin-top: 12px;
+    }
+
+    .match-title {
+      font-size: 15px;
+      font-weight: 800;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .doors-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .door-pill {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px;
+      text-align: center;
+    }
+
+    .door-pill span {
+      display: block;
+      font-size: 10px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .door-pill strong {
+      display: block;
+      font-size: 14px;
+      margin-top: 2px;
+    }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      background: #eef0f3;
+      padding: 4px;
+      border-radius: 12px;
+    }
+
+    .tab-btn {
+      border: none;
+      background: transparent;
+      padding: 9px 10px;
+      border-radius: 9px;
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .tab-btn.active {
+      background: #fff;
+      color: var(--text);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: #374151;
+      margin-bottom: 6px;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    select {
+      width: 100%;
+      padding: 11px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      font-size: 14px;
+      background: #fff;
+      color: var(--text);
+    }
+
+    .locked-ficha {
+      background: #f9fafb;
+      border: 1.5px solid #d1d5db;
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .locked-ficha strong {
+      display: block;
+      font-size: 15px;
+    }
+
+    .locked-ficha small {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .lock-tag {
+      background: #e5e7eb;
+      color: #1f2937;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 5px 9px;
+      border-radius: 8px;
+      white-space: nowrap;
+    }
+
+    .choice-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 6px;
+    }
+
+    .choice-btn {
+      padding: 13px 10px;
+      border-radius: 12px;
+      border: 1.5px solid var(--border);
+      background: #fff;
+      font-weight: 800;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .choice-btn.active-yes {
+      border-color: var(--ok);
+      background: var(--ok-soft);
+      color: #065f46;
+    }
+
+    .choice-btn.active-no {
+      border-color: var(--bad);
+      background: var(--bad-soft);
+      color: #991b1b;
+    }
+
+    .margins {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .margin-btn {
+      padding: 9px 4px;
+      border-radius: 9px;
+      border: 1px solid #d1d5db;
+      background: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .margin-btn.active {
+      background: var(--sfc);
+      color: #fff;
+      border-color: var(--sfc);
+    }
+
+    .primary-btn {
+      width: 100%;
+      margin-top: 14px;
+      padding: 13px;
+      border: none;
+      border-radius: 12px;
+      background: var(--sfc);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .primary-btn:hover { background: var(--sfc-dark); }
+    .primary-btn:disabled { opacity: 0.65; cursor: not-allowed; }
+
+    .secondary-btn {
+      width: 100%;
+      margin-top: 8px;
+      padding: 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      background: #fff;
+      color: #374151;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .status-banner {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      display: none;
+    }
+
+    .status-banner.show { display: block; }
+    .status-banner.ok { background: var(--ok-soft); color: #065f46; border: 1px solid #a7f3d0; }
+    .status-banner.warn { background: var(--warn-soft); color: #92400e; border: 1px solid #fde68a; }
+    .status-banner.err { background: var(--bad-soft); color: #991b1b; border: 1px solid #fecaca; }
+
+    .field-gap { margin-top: 12px; }
+
+    .person-item {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin-top: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+    }
+
+    .pill-mini {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: #f3f4f6;
+      color: #111827;
+    }
+
+    .pill-ok { background: var(--ok-soft); color: #065f46; }
+    .pill-no { background: var(--bad-soft); color: #991b1b; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <div class="card header-sfc">
+      <div class="top-row">
+        <span class="badge">Sevilla FC · Hostelería</span>
+        <span id="confirmBadge" class="badge badge-estimado">Hora estimada</span>
+      </div>
+      <h1>Disponibilidad de Partido</h1>
+      <p class="sub">Acceso individual protegido por ficha (Correo + Contraseña/PIN)</p>
+
+      <div class="match-box" style="color: var(--text);">
+        <div class="match-title">
+          <span>Sevilla FC - Málaga CF</span>
+          <span class="pill-mini">LFP27.15</span>
+        </div>
+        <div style="font-size: 12px; color: var(--muted); margin-top: 4px;" id="matchDateLabel">
+          Lunes, 7 de diciembre de 2026 · 21:00
+        </div>
+        <div class="doors-grid">
+          <div class="door-pill">
+            <span>Inicio</span>
+            <strong id="doorStart">21:00</strong>
+          </div>
+          <div class="door-pill">
+            <span>VIP (-1h30)</span>
+            <strong id="doorVip">19:30</strong>
+          </div>
+          <div class="door-pill" id="genBox">
+            <span id="genLabel">General (-1h)</span>
+            <strong id="doorGen">20:00</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="loginCard" class="card">
+      <h2 style="margin: 0 0 6px; font-size: 16px;">Identificación de acceso</h2>
+      <p style="margin: 0 0 12px; font-size: 13px; color: var(--muted);">
+        Introduce tu correo registrado y tu contraseña o PIN asignado para entrar directamente en tu ficha.
+      </p>
+
+      <label for="loginEmail">Correo electrónico</label>
+      <input id="loginEmail" type="email" autocomplete="email" placeholder="nombre.apellido@sevillafc.es" />
+
+      <div class="field-gap">
+        <label for="loginPassword">Contraseña / PIN</label>
+        <input id="loginPassword" type="password" autocomplete="current-password" placeholder="••••••" />
+      </div>
+
+      <button id="loginBtn" class="primary-btn" type="button" onclick="loginWithPassword()">Entrar a mi ficha</button>
+
+      <div id="loginMsg" class="status-banner"></div>
+    </div>
+
+    <div id="mainApp" class="hidden">
+      <div class="card" style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+        <div>
+          <div style="font-size: 11px; color: var(--muted); font-weight: 700;">SESIÓN ACTIVA</div>
+          <div id="sessionUserTitle" style="font-size: 14px; font-weight: 800;">—</div>
+          <div id="sessionUserMeta" style="font-size: 12px; color: var(--muted);">—</div>
+        </div>
+        <button class="secondary-btn" style="width: auto; margin: 0;" type="button" onclick="logoutUser()">Salir</button>
+      </div>
+
+      <div id="roleTabs" class="tabs hidden" style="margin-top: 10px;">
+        <button id="tabEmp" class="tab-btn active" type="button" onclick="switchTab('emp')">Mi ficha</button>
+        <button id="tabEnc" class="tab-btn" type="button" onclick="switchTab('enc')">Encargado zona</button>
+      </div>
+
+      <div id="viewEmp" class="card" style="margin-top: 10px;">
+        <label>Tu ficha asignada (bloqueada por correo)</label>
+        <div class="locked-ficha">
+          <div>
+            <strong id="empName">—</strong>
+            <small id="empZoneRole">—</small>
+          </div>
+          <span id="empFichaBadge" class="lock-tag">Ficha #—</span>
+        </div>
+
+        <div class="field-gap">
+          <label>¿Estás disponible para el Sevilla FC - Málaga CF?</label>
+          <div class="choice-group">
+            <button id="btnYes" class="choice-btn" type="button" onclick="setAvailable(true)">Sí, disponible</button>
+            <button id="btnNo" class="choice-btn" type="button" onclick="setAvailable(false)">No disponible</button>
+          </div>
+        </div>
+
+        <div id="marginSection" class="field-gap">
+          <label>Margen de horas disponible</label>
+          <div class="margins" id="marginButtons"></div>
+        </div>
+
+        <button class="primary-btn" type="button" onclick="saveMyAvailability()">Guardar mi disponibilidad</button>
+        <div id="empMsg" class="status-banner"></div>
+      </div>
+
+      <div id="viewEnc" class="card hidden" style="margin-top: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+          <h2 style="margin: 0; font-size: 16px;">Disponibilidades recibidas</h2>
+          <span id="encCount" class="pill-mini pill-ok">0 disponibles</span>
+        </div>
+        <p style="margin: 4px 0 10px; font-size: 12px; color: var(--muted);">
+          Consulta de disponibilidades registradas para este partido.
+        </p>
+        <div id="encList"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://marrvzyyyguqnpvdkicz.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_dxD-ImtvorOIUrqZUZrREQ_keHGZ7tD";
+
+    const STAFF = [
+      { id: null, ficha: "160", nombre: "Abril Jiménez Rubio", zona: "Preferencia", rol: "camarero", email: "abril.jimenez@prueba.local" },
+      { id: null, ficha: "105", nombre: "Alba Tirado Sánchez", zona: "Fondo", rol: "camarero", email: "alba.tirado@prueba.local" },
+      { id: null, ficha: "114", nombre: "Alejandro Vallejos", zona: "Gol Norte", rol: "camarero", email: "alejandro.vallejos@prueba.local" },
+      { id: null, ficha: "140", nombre: "Ana González Pérez", zona: "Preferencia", rol: "camarero", email: "ana.gonzalez@prueba.local" },
+      { id: null, ficha: "141", nombre: "Ana Jiménez Martín", zona: "Fondo", rol: "camarero", email: "ana.jimenez@prueba.local" },
+      { id: null, ficha: "197", nombre: "Carmen Girón López", zona: "Gol Sur", rol: "camarero", email: "miguelitoergrande@gmail.com" },
+      { id: null, ficha: "95", nombre: "Gabriela Medina Ruiz", zona: "Preferencia", rol: "camarero", email: "gabriela.medina@prueba.local" },
+      { id: null, ficha: "191", nombre: "Laura López Díaz", zona: "Fondo", rol: "camarero", email: "laura.lopez@prueba.local" },
+      { id: null, ficha: "120", nombre: "Marcos Maqueda Romero", zona: "Gol Norte", rol: "camarero", email: "marcos.maqueda@prueba.local" },
+      { id: null, ficha: "161", nombre: "Marta Alfonso Compán", zona: "Gol Sur", rol: "camarero", email: "marta.alfonso@prueba.local" },
+      { id: null, ficha: "166", nombre: "Marta Espinosa Gil", zona: "Preferencia", rol: "camarero", email: "marta.espinosa@prueba.local" },
+      { id: null, ficha: "201", nombre: "Paula Baena Morales", zona: "Fondo", rol: "camarero", email: "paula.baena@prueba.local" },
+      { id: null, ficha: "204", nombre: "Paula Maqueda Romero", zona: "Gol Norte", rol: "camarero", email: "paula.maqueda@prueba.local" },
+      { id: null, ficha: "208", nombre: "Rocío Limón Ortega", zona: "Gol Sur", rol: "camarero", email: "rocio.limon@prueba.local" },
+      { id: null, ficha: "010", nombre: "Mario Lobon Estudillo", zona: "Preferencia", rol: "encargado_zona", email: "mdominguezbaena@gmail.com" }
+    ];
+
+    const MARGINS = ["2 horas", "3 horas", "4 horas", "5 horas", "6 horas"];
+
+    let state = {
+      confirmado: false,
+      altoRiesgo: false,
+      horaInicio: "21:00",
+      currentUser: null,
+      draftAvailable: null,
+      draftMargin: "5 horas",
+      availabilities: {}
+    };
+
+    const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    sbClient.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user?.email && !state.currentUser) {
+        await resolveAndOpenUserByEmail(session.user.email);
+      }
+    });
+
+    function isZoneManagerRole(rol) {
+      const r = String(rol || "").trim().toLowerCase();
+      return r === "encargado_zona" || r === "encargado de zona" || r === "admin";
+    }
+
+    function init() {
+      const mWrap = document.getElementById("marginButtons");
+      MARGINS.forEach((m) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "margin-btn";
+        btn.textContent = m;
+        btn.onclick = () => {
+          state.draftMargin = m;
+          renderMargins();
+        };
+        mWrap.appendChild(btn);
+      });
+
+      document.getElementById("loginPassword").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") loginWithPassword();
+      });
+
+      renderMatchDoors();
+      checkSupabaseSession();
+    }
+
+    function computeDoors() {
+      const [hh, mm] = state.horaInicio.split(":").map(Number);
+      const startMin = hh * 60 + mm;
+      const vipMin = startMin - 90;
+      const genOffset = state.altoRiesgo ? 90 : 60;
+      const genMin = startMin - genOffset;
+
+      const fmt = (mins) => {
+        const wrapped = ((mins % 1440) + 1440) % 1440;
+        return `${String(Math.floor(wrapped / 60)).padStart(2, "0")}:${String(wrapped % 60).padStart(2, "0")}`;
+      };
+
+      return {
+        start: fmt(startMin),
+        vip: fmt(vipMin),
+        gen: fmt(genMin),
+        genLabel: state.altoRiesgo ? "General (-1h30)" : "General (-1h)"
+      };
+    }
+
+    function renderMatchDoors() {
+      const d = computeDoors();
+      document.getElementById("doorStart").textContent = d.start;
+      document.getElementById("doorVip").textContent = d.vip;
+      document.getElementById("doorGen").textContent = d.gen;
+      document.getElementById("genLabel").textContent = d.genLabel;
+
+      const badge = document.getElementById("confirmBadge");
+      if (state.confirmado) {
+        badge.textContent = "Horario confirmado";
+        badge.className = "badge badge-confirmado";
+      } else {
+        badge.textContent = "Hora estimada";
+        badge.className = "badge badge-estimado";
+      }
+    }
+
+    function showBanner(id, msg, type = "ok") {
+      const el = document.getElementById(id);
+      el.textContent = msg;
+      el.className = `status-banner show ${type}`;
+    }
+
+    function mapEmployeeRow(data, fallbackEmail) {
+      const normalized = (data.email ?? fallbackEmail ?? "").toLowerCase();
+      const localFallback = STAFF.find((u) => u.email.toLowerCase() === normalized);
+      return {
+        id: data.id ?? localFallback?.id ?? null,
+        ficha: String(data.numero_ficha ?? data.ficha ?? localFallback?.ficha ?? "—"),
+        nombre: data.nombre_mostrar ?? data.nombre ?? data.nombre_completo ?? localFallback?.nombre ?? normalized,
+        zona: data.zona_asignada ?? data.zona ?? data.area ?? localFallback?.zona ?? "Sin zona",
+        rol: (data.rol ?? localFallback?.rol ?? "camarero").toLowerCase(),
+        email: normalized
+      };
+    }
+
+    async function resolveEmployeeFromSupabase(email) {
+      const normalized = email.trim().toLowerCase();
+
+      const { data, error } = await sbClient
+        .from("empleados")
+        .select("*")
+        .ilike("email", normalized)
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (data) {
+        return mapEmployeeRow(data, normalized);
+      }
+
+      return STAFF.find((u) => u.email.toLowerCase() === normalized) || null;
+    }
+
+    async function resolveAndOpenUserByEmail(email) {
+      try {
+        const employee = await resolveEmployeeFromSupabase(email);
+        if (!employee) {
+          showBanner("loginMsg", `El correo ${email} no figura asignado a ningún empleado registrado.`, "err");
+          await sbClient.auth.signOut().catch(() => {});
+          return;
+        }
+        openAppForUser(employee);
+      } catch (err) {
+        showBanner("loginMsg", `Error consultando empleados en Supabase: ${err.message}`, "err");
+      }
+    }
+
+    async function checkSupabaseSession() {
+      const { data } = await sbClient.auth.getSession();
+      if (data?.session?.user?.email) {
+        await resolveAndOpenUserByEmail(data.session.user.email);
+      }
+    }
+
+    async function loginWithPassword() {
+      const email = document.getElementById("loginEmail").value.trim().toLowerCase();
+      const password = document.getElementById("loginPassword").value;
+      const btn = document.getElementById("loginBtn");
+
+      if (!email || !password) {
+        showBanner("loginMsg", "Introduce tu correo electrónico y tu contraseña o PIN.", "warn");
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = "Verificando...";
+
+      const { data, error } = await sbClient.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      btn.disabled = false;
+      btn.textContent = "Entrar a mi ficha";
+
+      if (error) {
+        showBanner("loginMsg", `Acceso denegado: ${error.message}`, "err"); return; }  const signedEmail = data?.user?.email \vert{}\vert{} email; await resolveAndOpenUserByEmail(signedEmail); }  async function openAppForUser(user) { state.currentUser = user; document.getElementById("loginCard").classList.add("hidden"); document.getElementById("mainApp").classList.remove("hidden");  const esEncargadoZona = isZoneManagerRole(user.rol); const etiquetaRol = esEncargadoZona ? "Encargado de zona" : (user.rol === "encargado" \vert{}\vert{} user.rol === "encargados") ? "Encargado" : "Camarero";  document.getElementById("sessionUserTitle").textContent = user.nombre; document.getElementById("sessionUserMeta").textContent = `Ficha #${user.ficha} · ${user.zona} ·${etiquetaRol}`;
+
+      const roleTabs = document.getElementById("roleTabs");
+
+      await loadExistingAvailabilityForUser(user);
+
+      if (esEncargadoZona) {
+        roleTabs.classList.add("hidden");
+        document.getElementById("viewEmp").classList.add("hidden");
+        document.getElementById("viewEnc").classList.remove("hidden");
+        renderEncargadoList();
+      } else {
+        roleTabs.classList.add("hidden");
+        document.getElementById("viewEnc").classList.add("hidden");
+        document.getElementById("viewEmp").classList.remove("hidden");
+        loadEmployeeFicha(user);
+      }
+    }
+
+    async function loadExistingAvailabilityForUser(user) {
+      if (isZoneManagerRole(user.rol) || user.rol === "encargado" || user.rol === "encargados" || user.rol === "admin") {
+        await loadAllAvailabilitiesForManager();
+        return;
+      }
+
+      if (!user.id) return;
+      const { data } = await sbClient
+        .from("convocatorias")
+        .select("*")
+        .eq("partido_id", "LFP27.15")
+        .eq("empleado_id", user.id)
+        .maybeSingle();
+
+      if (data) {
+        state.availabilities[user.ficha] = {
+          ficha: user.ficha,
+          nombre: user.nombre,
+          zona: user.zona,
+          disponible: Boolean(data.disponible),
+          margen: data.margen_horas || (data.disponible ? "5 horas" : "No disponible"),
+          actualizado: "Guardado en BD"
+        };
+      }
+    }
+
+    async function loadAllAvailabilitiesForManager() {
+      const { data: convs, error } = await sbClient
+        .from("convocatorias")
+        .select("*")
+        .eq("partido_id", "LFP27.15");
+
+      if (error) {
+        document.getElementById("encList").innerHTML =
+          `<div style="font-size:13px;color:var(--bad);padding:10px 0;">Error cargando convocatorias: ${error.message}</div>`; return; }  const { data: emps } = await sbClient .from("empleados") .select("*");  const byId = new Map(); (emps \vert{}\vert{} []).forEach((e) => { if (e.id) byId.set(String(e.id), e); });  const merged = {}; (convs \vert{}\vert{} []).forEach((row) => { const empDb = byId.get(String(row.empleado_id)); const fallback = STAFF.find( (s) => empDb?.email && s.email.toLowerCase() === empDb.email.toLowerCase() );  const ficha = String(empDb?.numero_ficha ?? empDb?.ficha ?? fallback?.ficha ?? row.empleado_id ?? "—"); const nombre = empDb?.nombre_mostrar ?? empDb?.nombre ?? empDb?.nombre_completo ?? fallback?.nombre ?? "Empleado"; const zona = empDb?.zona_asignada ?? empDb?.zona ?? empDb?.area ?? fallback?.zona ?? "Sin zona";  merged[ficha] = { ficha, nombre, zona, disponible: Boolean(row.disponible), margen: row.margen_horas \vert{}\vert{} (row.disponible ? "5 horas" : "No disponible"), actualizado: "Guardado en BD" }; });  state.availabilities = merged; }  function logoutUser() { state.currentUser = null; state.availabilities = {}; document.getElementById("loginPassword").value = ""; document.getElementById("loginMsg").className = "status-banner"; sbClient.auth.signOut().catch(() => {}); document.getElementById("mainApp").classList.add("hidden"); document.getElementById("loginCard").classList.remove("hidden"); }  async function switchTab(tab) { const esEncargadoZona = isZoneManagerRole(state.currentUser?.rol); if (esEncargadoZona) { document.getElementById("roleTabs").classList.add("hidden"); document.getElementById("viewEmp").classList.add("hidden"); document.getElementById("viewEnc").classList.remove("hidden"); await loadAllAvailabilitiesForManager(); renderEncargadoList(); return; }  const isEmp = tab === "emp"; document.getElementById("tabEmp").classList.toggle("active", isEmp); document.getElementById("tabEnc").classList.toggle("active", !isEmp); document.getElementById("viewEmp").classList.toggle("hidden", !isEmp); document.getElementById("viewEnc").classList.toggle("hidden", isEmp); if (!isEmp) { if (state.currentUser && (state.currentUser.rol === "encargado" \vert{}\vert{} state.currentUser.rol === "encargados" \vert{}\vert{} state.currentUser.rol === "admin")) { await loadAllAvailabilitiesForManager(); } renderEncargadoList(); } }  function loadEmployeeFicha(user) { document.getElementById("empName").textContent = user.nombre; document.getElementById("empZoneRole").textContent = `${user.zona} · Ficha exclusiva para ${user.email}`; document.getElementById("empFichaBadge").textContent = `Ficha #${user.ficha}`;
+      document.getElementById("empMsg").className = "status-banner";
+
+      const prev = state.availabilities[user.ficha];
+      state.draftAvailable = prev ? prev.disponible : null;
+      state.draftMargin = prev && prev.margen && prev.margen !== "No disponible" ? prev.margen : "5 horas";
+
+      renderChoiceButtons();
+      renderMargins();
+    }
+
+    function setAvailable(val) {
+      state.draftAvailable = val;
+      renderChoiceButtons();
+    }
+
+    function renderChoiceButtons() {
+      const yes = document.getElementById("btnYes");
+      const no = document.getElementById("btnNo");
+      const marginSec = document.getElementById("marginSection");
+
+      yes.className = "choice-btn" + (state.draftAvailable === true ? " active-yes" : "");
+      no.className = "choice-btn" + (state.draftAvailable === false ? " active-no" : "");
+      marginSec.style.display = state.draftAvailable === false ? "none" : "block";
+    }
+
+    function renderMargins() {
+      const btns = document.querySelectorAll(".margin-btn");
+      btns.forEach((b) => {
+        b.classList.toggle("active", b.textContent === state.draftMargin);
+      });
+    }
+
+    async function saveMyAvailability() {
+      const user = state.currentUser;
+      if (!user) return;
+      if (state.draftAvailable === null) {
+        showBanner("empMsg", "Selecciona si estás disponible o no disponible.", "warn");
+        return;
+      }
+
+      const payload = {
+        ficha: user.ficha,
+        nombre: user.nombre,
+        zona: user.zona,
+        disponible: state.draftAvailable,
+        margen: state.draftAvailable ? state.draftMargin : "No disponible",
+        actualizado: new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })
+      };
+
+      state.availabilities[user.ficha] = payload;
+
+      const dbRow = {
+        partido_id: "LFP27.15",
+        disponible: payload.disponible,
+        margen_horas: payload.margen
+      };
+      if (user.id) {
+        dbRow.empleado_id = user.id;
+      }
+
+      const { error } = await sbClient
+        .from("convocatorias")
+        .upsert(dbRow, { onConflict: "partido_id,empleado_id" });
+
+      if (error) {
+        showBanner("empMsg", `Guardado local; Supabase devolvió: ${error.message}`, "warn");
+        renderEncargadoList();
+        return;
+      }
+
+      showBanner("empMsg", `Ficha de ${user.nombre} (#${user.ficha}) guardada como${payload.disponible ? "DISPONIBLE (" + payload
