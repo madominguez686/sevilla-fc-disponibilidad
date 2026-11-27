@@ -185,6 +185,7 @@
 
     input[type="text"],
     input[type="email"],
+    input[type="password"],
     select {
       width: 100%;
       padding: 11px 12px;
@@ -292,6 +293,7 @@
     }
 
     .primary-btn:hover { background: var(--sfc-dark); }
+    .primary-btn:disabled { opacity: 0.65; cursor: not-allowed; }
 
     .secondary-btn {
       width: 100%;
@@ -357,7 +359,7 @@
         <span id="confirmBadge" class="badge badge-estimado">Hora estimada</span>
       </div>
       <h1>Disponibilidad de Partido</h1>
-      <p class="sub">Acceso individual protegido por ficha (Opción B · Magic Link)</p>
+      <p class="sub">Acceso individual protegido por ficha (Correo + Contraseña/PIN)</p>
 
       <div class="match-box" style="color: var(--text);">
         <div class="match-title">
@@ -387,12 +389,18 @@
     <div id="loginCard" class="card">
       <h2 style="margin: 0 0 6px; font-size: 16px;">Identificación de acceso</h2>
       <p style="margin: 0 0 12px; font-size: 13px; color: var(--muted);">
-        Introduce tu correo registrado en la ficha de empleado para recibir el enlace de acceso (Magic Link) y entrar exclusivamente en tu ficha.
+        Introduce tu correo registrado y tu contraseña o PIN asignado para entrar directamente en tu ficha.
       </p>
 
       <label for="loginEmail">Correo electrónico</label>
-      <input id="loginEmail" type="email" placeholder="nombre.apellido@sevillafc.es" />
-      <button class="primary-btn" type="button" onclick="sendMagicLink()">Enviar enlace de acceso (Magic Link)</button>
+      <input id="loginEmail" type="email" autocomplete="email" placeholder="nombre.apellido@sevillafc.es" />
+
+      <div class="field-gap">
+        <label for="loginPassword">Contraseña / PIN</label>
+        <input id="loginPassword" type="password" autocomplete="current-password" placeholder="••••••" />
+      </div>
+
+      <button id="loginBtn" class="primary-btn" type="button" onclick="loginWithPassword()">Entrar a mi ficha</button>
 
       <div id="loginMsg" class="status-banner"></div>
     </div>
@@ -489,7 +497,7 @@
     const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     sbClient.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user?.email) {
+      if (session?.user?.email && !state.currentUser) {
         await resolveAndOpenUserByEmail(session.user.email);
       }
     });
@@ -506,6 +514,10 @@
           renderMargins();
         };
         mWrap.appendChild(btn);
+      });
+
+      document.getElementById("loginPassword").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") loginWithPassword();
       });
 
       renderMatchDoors();
@@ -604,24 +616,34 @@
       }
     }
 
-    async function sendMagicLink() {
+    async function loginWithPassword() {
       const email = document.getElementById("loginEmail").value.trim().toLowerCase();
-      if (!email) {
-        showBanner("loginMsg", "Escribe tu correo electrónico.", "warn");
+      const password = document.getElementById("loginPassword").value;
+      const btn = document.getElementById("loginBtn");
+
+      if (!email || !password) {
+        showBanner("loginMsg", "Introduce tu correo electrónico y tu contraseña o PIN.", "warn");
         return;
       }
 
-      const cleanRedirect = `${window.location.origin}${window.location.pathname}`;
-      const { error } = await sbClient.auth.signInWithOtp({
+      btn.disabled = true;
+      btn.textContent = "Verificando...";
+
+      const { data, error } = await sbClient.auth.signInWithPassword({
         email,
-        options: { emailRedirectTo: cleanRedirect }
+        password
       });
 
+      btn.disabled = false;
+      btn.textContent = "Entrar a mi ficha";
+
       if (error) {
-        showBanner("loginMsg", `Error al enviar enlace: ${error.message}`, "err");
-      } else {
-        showBanner("loginMsg", `Enlace enviado a ${email}. Ábrelo desde tu correo para entrar directamente en tu ficha.`, "ok");
+        showBanner("loginMsg", `Acceso denegado: ${error.message}`, "err");
+        return;
       }
+
+      const signedEmail = data?.user?.email || email;
+      await resolveAndOpenUserByEmail(signedEmail);
     }
 
     async function openAppForUser(user) {
@@ -668,6 +690,8 @@
 
     function logoutUser() {
       state.currentUser = null;
+      document.getElementById("loginPassword").value = "";
+      document.getElementById("loginMsg").className = "status-banner";
       sbClient.auth.signOut().catch(() => {});
       document.getElementById("mainApp").classList.add("hidden");
       document.getElementById("loginCard").classList.remove("hidden");
