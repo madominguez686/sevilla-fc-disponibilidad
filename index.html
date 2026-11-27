@@ -65,6 +65,24 @@
       padding: 18px;
     }
 
+    .header-sfc .match-box {
+      margin-top: 12px;
+    }
+
+    body.sign-sheet-mode .header-sfc {
+      padding: 14px;
+    }
+
+    body.sign-sheet-mode .header-sfc .top-row,
+    body.sign-sheet-mode .header-sfc > h1,
+    body.sign-sheet-mode .header-sfc > .sub {
+      display: none;
+    }
+
+    body.sign-sheet-mode .header-sfc .match-box {
+      margin-top: 0;
+    }
+
     .top-row {
       display: flex;
       justify-content: space-between;
@@ -114,7 +132,6 @@
       border: 1px solid var(--border);
       border-radius: 12px;
       padding: 12px;
-      margin-top: 12px;
     }
 
     .match-title {
@@ -1185,6 +1202,12 @@
       await resolveAndOpenUserByEmail(signedEmail);
     }
 
+    function syncSignSheetChrome() {
+      const isSign = Boolean(state.currentUser) && isZoneManagerRole(state.currentUser.rol) && state.zoneSubView === "firma";
+      document.body.classList.toggle("sign-sheet-mode", isSign);
+      document.getElementById("sessionCard").classList.toggle("hidden", isSign);
+    }
+
     function switchZoneView(viewName) {
       if (viewName === "convocatoria") {
         state.zoneSubView = "convocatoria";
@@ -1205,6 +1228,8 @@
       document.getElementById("viewAssembly").classList.toggle("hidden", !isMontar);
       document.getElementById("viewFinalSheet").classList.toggle("hidden", !isFinal);
       document.getElementById("viewSignSheet").classList.toggle("hidden", !isSign);
+
+      syncSignSheetChrome();
 
       if (isFinal) {
         renderFinalConvocatoriaSheet();
@@ -1248,6 +1273,7 @@
         document.getElementById("zoneModeTabs").classList.add("hidden");
         document.getElementById("viewEnc").classList.add("hidden");
         document.getElementById("viewEmp").classList.remove("hidden");
+        syncSignSheetChrome();
         loadEmployeeFicha(user);
       }
     }
@@ -1371,6 +1397,7 @@
       state.availabilities = {};
       state.postConfigs = {};
       state.zoneSubView = "montar";
+      syncSignSheetChrome();
       document.getElementById("appShell").classList.remove("wide-mode");
       document.getElementById("loginPassword").value = "";
       document.getElementById("loginMsg").className = "status-banner";
