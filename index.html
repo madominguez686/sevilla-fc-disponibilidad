@@ -366,6 +366,7 @@
     }
 
     .pill-ok { background: var(--ok-soft); color: #065f46; }
+    .pill-zone { background: #fef3c7; color: #92400e; }
     .pill-no { background: var(--bad-soft); color: #991b1b; }
     .pill-pend { background: #fef3c7; color: #92400e; }
 
@@ -411,11 +412,16 @@
       vertical-align: middle;
     }
 
+    .table-scroll {
+      overflow-x: auto;
+      margin-top: 10px;
+    }
+
     .final-sheet-table {
       width: 100%;
       border-collapse: collapse;
       font-size: 13px;
-      margin-top: 10px;
+      min-width: 680px;
     }
 
     .final-sheet-table th {
@@ -435,8 +441,19 @@
       vertical-align: middle;
     }
 
-    .final-sheet-table tr:last-child td {
+    .final-sheet-table tfoot td {
+      background: #f9fafb;
+      border-top: 2px solid #d1d5db;
       border-bottom: none;
+      font-weight: 800;
+      color: var(--text);
+      padding: 12px 10px;
+      font-size: 13px;
+    }
+
+    .num-col {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
     }
 
     .pending-row {
@@ -710,7 +727,7 @@
           <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
             <div>
               <h2 style="margin: 0; font-size: 17px;">Convocatoria asignada · <span id="finalSheetZoneLabel">Preferencia</span></h2>
-              <p style="margin: 3px 0 0; font-size: 12px; color: var(--muted);">
+              <p id="finalSheetSubtitle" style="margin: 3px 0 0; font-size: 12px; color: var(--muted);">
                 Hora de salida calculada como hora del partido + 2 horas (<strong id="finalExitRef">23:00</strong>).
               </p>
             </div>
@@ -737,6 +754,13 @@
       horaInicio: "21:00",
       confirmado: false,
       altoRiesgo: false
+    };
+
+    // Coste por hora (€/h) según puesto desempeñado en convocatoria
+    const TARIFAS_HORA = {
+      camarero: 14.0,
+      encargado: 18.0,
+      encargado_zona: 22.0
     };
 
     const PUESTOS_ESTADIO = [
@@ -816,6 +840,11 @@
       return `${hh.padStart(2, "0")}:${mm}`;
     }
 
+    function toMinutesFromHHMM(hhmm) {
+      const [hh, mm] = normalizeHHMM(hhmm, "00:00").split(":").map(Number);
+      return hh * 60 + mm;
+    }
+
     function addHoursToHHMM(hhmm, hoursToAdd = 2) {
       const clean = normalizeHHMM(hhmm, "21:00");
       const [hh, mm] = clean.split(":").map(Number);
@@ -823,6 +852,45 @@
       const outH = String(Math.floor(totalMins / 60)).padStart(2, "0");
       const outM = String(totalMins % 60).padStart(2, "0");
       return `${outH}:${outM}`;
+    }
+
+    function computeShiftHours(horaEntradaHHMM, horaSalidaHHMM) {
+      const startMins = toMinutesFromHHMM(horaEntradaHHMM);
+      let endMins = toMinutesFromHHMM(horaSalidaHHMM);
+      if (endMins < startMins) {
+        endMins += 1440;
+      }
+      return Math.max(0, (endMins - startMins) / 60);
+    }
+
+    function normalizeRoleKey(puestoRol) {
+      const r = String(puestoRol || "").trim().toLowerCase();
+      if (r === "encargado_zona" || r === "encargado de zona") return "encargado_zona";
+      if (r === "encargado" || r === "encargados") return "encargado";
+      return "camarero";
+    }
+
+    function getRoleDisplayName(roleKey) {
+      if (roleKey === "encargado_zona") return "Encargado de zona";
+      if (roleKey === "encargado") return "Encargado";
+      return "Camarero";
+    }
+
+    function getRoleHourlyRate(roleKey) {
+      return TARIFAS_HORA[roleKey] ?? TARIFAS_HORA.camarero;
+    }
+
+    function formatHours(hoursValue) {
+      return `${hoursValue.toFixed(2).replace(".", ",")} h`;
+    }
+
+    function formatCurrencyEUR(amountValue) {
+      return new Intl.NumberFormat("es-ES", {
+        style: "currency",
+        currency: "EUR",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }).format(amountValue);
     }
 
     const TIME_SLOTS = buildQuarterHourSlots("15:00", "23:45");
@@ -883,6 +951,7 @@
     }
 
     function applyMatchHeaderTexts() {
+      const horaSalidaRef = addHoursToHHMM(MATCH_INFO.horaInicio, 2);
       document.title = `Disponibilidad Sevilla FC · ${MATCH_INFO.partido}`;
       document.getElementById("matchTitleText").textContent = MATCH_INFO.partido;
       document.getElementById("matchCodeBadge").textContent = MATCH_INFO.codigo;
@@ -890,7 +959,9 @@
       document.getElementById("empQuestionLabel").textContent = `¿Estás disponible para el ${MATCH_INFO.partido}?`;
       document.getElementById("respondedMatchSubtitle").textContent =
         `Personal que ya ha indicado su respuesta para el ${MATCH_INFO.partido}.`;
-      document.getElementById("finalExitRef").textContent = addHoursToHHMM(MATCH_INFO.horaInicio, 2);
+      document.getElementById("finalExitRef").textContent = horaSalidaRef;
+      document.getElementById("finalSheetSubtitle").innerHTML =
+        `Hora de salida = hora del partido + 2h (<strong>${horaSalidaRef}</strong>) · Tarifas/h: Camarero <strong>${formatCurrencyEUR(TARIFAS_HORA.camarero)}</strong> · Encargado <strong>${formatCurrencyEUR(TARIFAS_HORA.encargado)}</strong> · Enc. zona <strong>${formatCurrencyEUR(TARIFAS_HORA.encargado_zona)}</strong>.`;
     }
 
     function init() {
@@ -1122,7 +1193,7 @@
           margen: data.margen_horas || (data.disponible ? "5 horas" : "No disponible"),
           barraAsignada: data.barra_asignada || "",
           horaEntrada: normalizeHHMM(data.hora_entrada, "19:30"),
-          puestoRol: data.puesto_rol || "camarero"
+          puestoRol: normalizeRoleKey(data.puesto_rol || user.rol)
         };
       }
     }
@@ -1172,6 +1243,7 @@
         const nombre = empDb?.nombre ?? "Empleado";
         const zona = empDb?.zona ?? "Sin zona";
         const horaClean = normalizeHHMM(row.hora_entrada, "19:30");
+        const rolNormalizado = normalizeRoleKey(row.puesto_rol || empDb?.rol || "camarero");
 
         const record = {
           convocatoriaId: row.id,
@@ -1183,7 +1255,7 @@
           margen: row.margen_horas || (row.disponible ? "5 horas" : "No disponible"),
           barraAsignada: row.barra_asignada || "",
           horaEntrada: horaClean,
-          puestoRol: (row.puesto_rol || "camarero").toLowerCase()
+          puestoRol: rolNormalizado
         };
 
         merged[empIdStr] = record;
@@ -1192,7 +1264,7 @@
           if (!configs[record.barraAsignada]) {
             configs[record.barraAsignada] = { encCount: 0, camCount: 0, slots: [] };
           }
-          const isEncSlot = record.puestoRol === "encargado" || record.puestoRol === "encargado_zona";
+          const isEncSlot = rolNormalizado === "encargado" || rolNormalizado === "encargado_zona";
           if (isEncSlot) {
             configs[record.barraAsignada].encCount += 1;
           } else {
@@ -1491,7 +1563,7 @@
 
       empRecord.barraAsignada = barra;
       empRecord.horaEntrada = horaLimpia;
-      empRecord.puestoRol = slot.rol;
+      empRecord.puestoRol = normalizeRoleKey(slot.rol);
 
       showBanner("encMsg", `Guardado: ${empRecord.nombre} en ${barra} (${slot.rol}) a las ${horaLimpia}.`, "ok");
       renderRespondedTable();
@@ -1595,8 +1667,8 @@
           const oa = postOrderMap.has(a.barraAsignada) ? postOrderMap.get(a.barraAsignada) : 999;
           const ob = postOrderMap.has(b.barraAsignada) ? postOrderMap.get(b.barraAsignada) : 999;
           if (oa !== ob) return oa - ob;
-          const ra = (a.puestoRol === "encargado" || a.puestoRol === "encargado_zona") ? 0 : 1;
-          const rb = (b.puestoRol === "encargado" || b.puestoRol === "encargado_zona") ? 0 : 1;
+          const ra = normalizeRoleKey(a.puestoRol) === "camarero" ? 1 : 0;
+          const rb = normalizeRoleKey(b.puestoRol) === "camarero" ? 1 : 0;
           if (ra !== rb) return ra - rb;
           return a.nombre.localeCompare(b.nombre, "es");
         });
@@ -1608,35 +1680,66 @@
         return;
       }
 
+      let totalHorasGeneral = 0;
+      let totalCosteGeneral = 0;
+
       const bodyHtml = assignedRows.map((row) => {
-        const esEnc = row.puestoRol === "encargado" || row.puestoRol === "encargado_zona";
-        const puestoTexto = esEnc ? "Encargado" : "Camarero";
+        const roleKey = normalizeRoleKey(row.puestoRol);
+        const puestoTexto = getRoleDisplayName(roleKey);
+        const tarifaHora = getRoleHourlyRate(roleKey);
         const horaEntradaTexto = normalizeHHMM(row.horaEntrada, "—");
+        const totalHorasPersona = computeShiftHours(horaEntradaTexto, horaSalida);
+        const costePersona = totalHorasPersona * tarifaHora;
+
+        totalHorasGeneral += totalHorasPersona;
+        totalCosteGeneral += costePersona;
+
+        const pillClass = roleKey === "encargado_zona"
+          ? "pill-zone"
+          : roleKey === "encargado"
+            ? ""
+            : "pill-ok";
 
         return `
           <tr>
             <td><strong>${row.barraAsignada}</strong></td>
             <td>${row.nombre}</td>
-            <td><span class="pill-mini ${esEnc ? "" : "pill-ok"}">${puestoTexto}</span></td>
+            <td>
+              <span class="pill-mini ${pillClass}">${puestoTexto}</span>
+              <span style="font-size:11px;color:var(--muted);margin-left:4px;">(${formatCurrencyEUR(tarifaHora)}/h)</span>
+            </td>
             <td><strong>${horaEntradaTexto}</strong></td>
             <td><strong>${horaSalida}</strong></td>
+            <td class="num-col"><strong>${formatHours(totalHorasPersona)}</strong></td>
+            <td class="num-col"><strong>${formatCurrencyEUR(costePersona)}</strong></td>
           </tr>
         `;
       }).join("");
 
       wrap.innerHTML = `
-        <table class="final-sheet-table">
-          <thead>
-            <tr>
-              <th>Ubicación</th>
-              <th>Persona</th>
-              <th>Puesto</th>
-              <th>Hora entrada</th>
-              <th>Hora salida</th>
-            </tr>
-          </thead>
-          <tbody>${bodyHtml}</tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="final-sheet-table">
+            <thead>
+              <tr>
+                <th>Ubicación</th>
+                <th>Persona</th>
+                <th>Puesto</th>
+                <th>Hora entrada</th>
+                <th>Hora salida</th>
+                <th class="num-col">Total horas</th>
+                <th class="num-col">Coste</th>
+              </tr>
+            </thead>
+            <tbody>${bodyHtml}</tbody>
+            <tfoot>
+              <tr>
+                <td colspan="5">TOTAL CONVOCATORIA (${assignedRows.length} ${assignedRows.length === 1 ? "persona" : "personas"})</td>
+                <td class="num-col">${formatHours(totalHorasGeneral)}</td>
+                <td class="num-col">${formatCurrencyEUR(totalCosteGeneral)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       `;
     }
 
