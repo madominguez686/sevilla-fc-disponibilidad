@@ -1211,21 +1211,6 @@
     ];
 
     const LOCAL_VISIBILITY_KEY = `sfc_conv_visible_${MATCH_INFO.codigo}`;
-    const LOCAL_DROPS_KEY = `sfc_conv_drops_${MATCH_INFO.codigo}`;
-
-    function loadDropAlerts() {
-      try {
-        const raw = localStorage.getItem(LOCAL_DROPS_KEY);
-        const parsed = raw ? JSON.parse(raw) : [];
-        return Array.isArray(parsed) ? parsed : [];
-      } catch (_) {
-        return [];
-      }
-    }
-
-    function saveDropAlerts(alerts) {
-      localStorage.setItem(LOCAL_DROPS_KEY, JSON.stringify(alerts));
-    }
 
     let state = {
       confirmado: MATCH_INFO.confirmado,
@@ -1241,7 +1226,7 @@
       zoneSubView: "montar",
       postConfigs: {},
       convocatoriaVisible: localStorage.getItem(LOCAL_VISIBILITY_KEY) === "true",
-      dropAlerts: loadDropAlerts()
+      dropAlerts: []
     };
 
     const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -1533,7 +1518,9 @@
             margen: parsed.label,
             barraAsignada: mine.barra_asignada || "",
             horaEntrada: normalizeHHMM(mine.hora_entrada, "19:30"),
-            puestoRol: normalizeRoleKey(mine.puesto_rol || user.rol)
+            puestoRol: normalizeRoleKey(mine.puesto_rol || user.rol),
+            bajaTrasConvocatoria: Boolean(mine.baja_tras_convocatoria),
+            puestoBaja: mine.puesto_baja || ""
           };
         }
       }
@@ -1576,6 +1563,7 @@
 
       const merged = {};
       const configs = {};
+      const dbDrops = [];
       let foundVisibilityFlag = false;
       let anyVisibleInDb = false;
 
@@ -1595,6 +1583,8 @@
         const disponible = Boolean(row.disponible);
         const barraAsignada = disponible ? (row.barra_asignada || "") : "";
         const parsed = parseAvailabilityFromStored(row.margen_horas, disponible);
+        const bajaDb = Boolean(row.baja_tras_convocatoria);
+        const puestoBajaDb = row.puesto_baja || "";
 
         const record = {
           convocatoriaId: row.id,
@@ -1606,10 +1596,24 @@
           margen: parsed.label,
           barraAsignada,
           horaEntrada: horaClean,
-          puestoRol: rolNormalizado
+          puestoRol: rolNormalizado,
+          bajaTrasConvocatoria: bajaDb,
+          puestoBaja: puestoBajaDb
         };
 
         merged[empIdStr] = record;
+
+        if (!disponible && bajaDb && puestoBajaDb) {
+          dbDrops.push({
+            empleadoId: empIdStr,
+            ficha,
+            nombre,
+            barra: puestoBajaDb,
+            rol: rolNormalizado,
+            hora: horaClean,
+            cubierto: false
+          });
+        }
 
         if (disponible && barraAsignada) {
           if (!configs[barraAsignada]) {
@@ -1630,13 +1634,10 @@
         }
       });
 
+      state.dropAlerts = dbDrops;
+
       (state.dropAlerts || []).forEach((al) => {
         if (!al.barra || al.cubierto) return;
-        const currentRec = merged[String(al.empleadoId)];
-        if (currentRec && currentRec.disponible && currentRec.barraAsignada) {
-          al.cubierto = true;
-          return;
-        }
         if (!configs[al.barra]) {
           configs[al.barra] = { encCount: 0, camCount: 0, slots: [] };
         }
@@ -1658,7 +1659,6 @@
           });
         }
       });
-      saveDropAlerts(state.dropAlerts);
 
       if (foundVisibilityFlag) {
         state.convocatoriaVisible = anyVisibleInDb;
@@ -1738,31 +1738,52 @@
       }
 
       box.classList.remove("hidden");
-      const itemsHtml = activeAlerts.map((a, idx) => `
+      const itemsHtml = activeAlerts.map((a) => `
         <div class="drop-alert-item">
           <div>
             <strong>AVISO DE BAJA:</strong> ${a.nombre} (#${a.ficha}) ha cambiado a <strong>NO DISPONIBLE</strong> · Puesto liberado: <strong>${a.barra}</strong> (${a.hora}).
           </div>
-          <button class="mini-toggle-btn" type="button" onclick="dismissDropAlert(${idx})">Marcar visto</button>
+          <button class="mini-toggle-btn" type="button" onclick="dismissDropAlert('${a.empleadoId}')">Marcar visto</button>
         </div>
       `).join("");
 
       box.innerHTML = itemsHtml;
     }
 
-    function dismissDropAlert(index) {
-      const activeAlerts = (state.dropAlerts || []).filter((a) => !a.cubierto);
-      const target = activeAlerts[index];
+    async function dismissDropAlert(empleadoId) {
+      const target = (state.dropAlerts || []).find(
+        (a) => !a.cubierto && String(a.empleadoId) === String(empleadoId)
+      );
       if (!target) return;
+
+      const { error } = await sbClient
+        .from("convocatorias")
+        .update({
+          baja_tras_convocatoria: false,
+          puesto_baja: null
+        })
+        .eq("partido_id", MATCH_INFO.codigo)
+        .eq("empleado_id", empleadoId);
+
+      if (error) {
+        showBanner("encMsg", `No se pudo limpiar el aviso en Supabase: ${error.message}`, "err");
+        return;
+      }
+
       target.cubierto = true;
-      saveDropAlerts(state.dropAlerts);
+      if (state.availabilities[String(empleadoId)]) {
+        state.availabilities[String(empleadoId)].bajaTrasConvocatoria = false;
+        state.availabilities[String(empleadoId)].puestoBaja = "";
+      }
       renderDropAlerts();
+      renderRespondedTable();
     }
 
     function logoutUser() {
       state.currentUser = null;
       state.availabilities = {};
       state.postConfigs = {};
+      state.dropAlerts = [];
       state.zoneSubView = "montar";
       syncSignSheetChrome();
       document.getElementById("appShell").classList.remove("wide-mode");
@@ -1919,23 +1940,10 @@
       const prev = user.id ? state.availabilities[String(user.id)] : null;
       const hadAssignedPost = Boolean(prev && prev.disponible && prev.barraAsignada);
       const turningUnavailable = state.draftAvailable === false;
-
-      if (turningUnavailable && hadAssignedPost) {
-        const nextDrops = (state.dropAlerts || []).filter(
-          (a) => !(String(a.empleadoId) === String(user.id) && !a.cubierto)
-        );
-        nextDrops.push({
-          empleadoId: String(user.id),
-          ficha: user.ficha,
-          nombre: user.nombre,
-          barra: prev.barraAsignada,
-          rol: prev.puestoRol || user.rol,
-          hora: normalizeHHMM(prev.horaEntrada, "19:30"),
-          cubierto: false
-        });
-        state.dropAlerts = nextDrops;
-        saveDropAlerts(nextDrops);
-      }
+      const puestoLiberado = turningUnavailable
+        ? (hadAssignedPost ? prev.barraAsignada : (prev?.puestoBaja || ""))
+        : "";
+      const marcarBajaDb = turningUnavailable && (hadAssignedPost || state.convocatoriaVisible || Boolean(prev?.bajaTrasConvocatoria));
 
       const nextBarra = turningUnavailable ? "" : (prev?.barraAsignada || "");
       const disponibilidadTexto = getDraftAvailabilityLabel();
@@ -1948,7 +1956,9 @@
         zona: user.zona,
         disponible: state.draftAvailable,
         margen: disponibilidadTexto,
-        barraAsignada: nextBarra
+        barraAsignada: nextBarra,
+        bajaTrasConvocatoria: turningUnavailable ? marcarBajaDb : false,
+        puestoBaja: turningUnavailable ? puestoLiberado : ""
       };
 
       if (user.id) {
@@ -1962,6 +1972,11 @@
       };
       if (turningUnavailable) {
         dbRow.barra_asignada = null;
+        dbRow.baja_tras_convocatoria = marcarBajaDb;
+        dbRow.puesto_baja = puestoLiberado || null;
+      } else {
+        dbRow.baja_tras_convocatoria = false;
+        dbRow.puesto_baja = null;
       }
       if (user.id) {
         dbRow.empleado_id = user.id;
@@ -1977,8 +1992,8 @@
       }
 
       renderEmployeeConvocatoriaStatus();
-      const dropNotice = (turningUnavailable && hadAssignedPost)
-        ? ` Se ha notificado la baja al encargado de zona y liberado el puesto (${prev.barraAsignada}).`
+      const dropNotice = (turningUnavailable && puestoLiberado)
+        ? ` Se ha notificado la baja al encargado de zona y liberado el puesto (${puestoLiberado}).`
         : "";
       showBanner(
         "empMsg",
@@ -2019,9 +2034,7 @@
       }
 
       const rowsHtml = responded.map((r) => {
-        const hadDrop = (state.dropAlerts || []).some(
-          (a) => !a.cubierto && String(a.empleadoId) === String(r.empleadoId)
-        );
+        const hadDrop = Boolean(!r.disponible && r.bajaTrasConvocatoria && r.puestoBaja);
         const estadoPill = r.disponible
           ? `<span class="pill-mini pill-ok">Sí · ${r.margen}</span>`
           : hadDrop
@@ -2031,7 +2044,7 @@
         const puestoTxt = r.disponible
           ? (r.barraAsignada ? `<strong>${r.barraAsignada}</strong>${horaTxt ? ` (${horaTxt})` : ""}` : `<span style="color:var(--muted);">Sin asignar</span>`)
           : hadDrop
-            ? `<span style="color:var(--bad);font-weight:700;">Hueco libre</span>`
+            ? `<span style="color:var(--bad);font-weight:700;">Hueco libre (${r.puestoBaja})</span>`
             : `<span style="color:var(--muted);">—</span>`;
 
         return `
@@ -2173,7 +2186,9 @@
         .update({
           barra_asignada: barra,
           hora_entrada: horaLimpia,
-          puesto_rol: slot.rol
+          puesto_rol: slot.rol,
+          baja_tras_convocatoria: false,
+          puesto_baja: null
         })
         .eq("partido_id", MATCH_INFO.codigo)
         .eq("empleado_id", empRecord.empleadoId);
@@ -2186,6 +2201,8 @@
       empRecord.barraAsignada = barra;
       empRecord.horaEntrada = horaLimpia;
       empRecord.puestoRol = normalizeRoleKey(slot.rol);
+      empRecord.bajaTrasConvocatoria = false;
+      empRecord.puestoBaja = "";
       slot.huecoLibre = false;
 
       (state.dropAlerts || []).forEach((al) => {
@@ -2193,7 +2210,6 @@
           al.cubierto = true;
         }
       });
-      saveDropAlerts(state.dropAlerts);
 
       renderDropAlerts();
       renderPostsAssembly();
