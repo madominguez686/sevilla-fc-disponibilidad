@@ -567,6 +567,19 @@
       el.className = `status-banner show ${type}`;
     }
 
+    function mapEmployeeRow(data, fallbackEmail) {
+      const normalized = (data.email ?? fallbackEmail ?? "").toLowerCase();
+      const localFallback = STAFF.find((u) => u.email.toLowerCase() === normalized);
+      return {
+        id: data.id ?? localFallback?.id ?? null,
+        ficha: String(data.numero_ficha ?? data.ficha ?? localFallback?.ficha ?? "—"),
+        nombre: data.nombre_mostrar ?? data.nombre ?? data.nombre_completo ?? localFallback?.nombre ?? normalized,
+        zona: data.zona_asignada ?? data.zona ?? data.area ?? localFallback?.zona ?? "Sin zona",
+        rol: (data.rol ?? localFallback?.rol ?? "empleado").toLowerCase(),
+        email: normalized
+      };
+    }
+
     async function resolveEmployeeFromSupabase(email) {
       const normalized = email.trim().toLowerCase();
 
@@ -581,15 +594,7 @@
       }
 
       if (data) {
-        const localFallback = STAFF.find((u) => u.email.toLowerCase() === normalized);
-        return {
-          id: data.id ?? localFallback?.id ?? null,
-          ficha: String(data.ficha ?? data.numero_ficha ?? localFallback?.ficha ?? "—"),
-          nombre: data.nombre ?? data.nombre_completo ?? localFallback?.nombre ?? normalized,
-          zona: data.zona ?? data.area ?? localFallback?.zona ?? "Sin zona",
-          rol: (data.rol ?? localFallback?.rol ?? "empleado").toLowerCase(),
-          email: (data.email ?? normalized).toLowerCase()
-        };
+        return mapEmployeeRow(data, normalized);
       }
 
       return STAFF.find((u) => u.email.toLowerCase() === normalized) || null;
@@ -668,6 +673,11 @@
     }
 
     async function loadExistingAvailabilityForUser(user) {
+      if (user.rol === "encargado" || user.rol === "admin") {
+        await loadAllAvailabilitiesForManager();
+        return;
+      }
+
       if (!user.id) return;
       const { data } = await sbClient
         .from("convocatorias")
@@ -688,8 +698,54 @@
       }
     }
 
+    async function loadAllAvailabilitiesForManager() {
+      const { data: convs, error } = await sbClient
+        .from("convocatorias")
+        .select("*")
+        .eq("partido_id", "LFP27.15");
+
+      if (error) {
+        document.getElementById("encList").innerHTML =
+          `<div style="font-size:13px;color:var(--bad);padding:10px 0;">Error cargando convocatorias: ${error.message}</div>`;
+        return;
+      }
+
+      const { data: emps } = await sbClient
+        .from("empleados")
+        .select("*");
+
+      const byId = new Map();
+      (emps || []).forEach((e) => {
+        if (e.id) byId.set(String(e.id), e);
+      });
+
+      const merged = {};
+      (convs || []).forEach((row) => {
+        const empDb = byId.get(String(row.empleado_id));
+        const fallback = STAFF.find(
+          (s) => empDb?.email && s.email.toLowerCase() === empDb.email.toLowerCase()
+        );
+
+        const ficha = String(empDb?.numero_ficha ?? empDb?.ficha ?? fallback?.ficha ?? row.empleado_id ?? "—");
+        const nombre = empDb?.nombre_mostrar ?? empDb?.nombre ?? empDb?.nombre_completo ?? fallback?.nombre ?? "Empleado";
+        const zona = empDb?.zona_asignada ?? empDb?.zona ?? empDb?.area ?? fallback?.zona ?? "Sin zona";
+
+        merged[ficha] = {
+          ficha,
+          nombre,
+          zona,
+          disponible: Boolean(row.disponible),
+          margen: row.margen_horas || (row.disponible ? "5 horas" : "No disponible"),
+          actualizado: "Guardado en BD"
+        };
+      });
+
+      state.availabilities = merged;
+    }
+
     function logoutUser() {
       state.currentUser = null;
+      state.availabilities = {};
       document.getElementById("loginPassword").value = "";
       document.getElementById("loginMsg").className = "status-banner";
       sbClient.auth.signOut().catch(() => {});
@@ -697,13 +753,18 @@
       document.getElementById("loginCard").classList.remove("hidden");
     }
 
-    function switchTab(tab) {
+    async function switchTab(tab) {
       const isEmp = tab === "emp";
       document.getElementById("tabEmp").classList.toggle("active", isEmp);
       document.getElementById("tabEnc").classList.toggle("active", !isEmp);
       document.getElementById("viewEmp").classList.toggle("hidden", !isEmp);
       document.getElementById("viewEnc").classList.toggle("hidden", isEmp);
-      if (!isEmp) renderEncargadoList();
+      if (!isEmp) {
+        if (state.currentUser && (state.currentUser.rol === "encargado" || state.currentUser.rol === "admin")) {
+          await loadAllAvailabilitiesForManager();
+        }
+        renderEncargadoList();
+      }
     }
 
     function loadEmployeeFicha(user) {
