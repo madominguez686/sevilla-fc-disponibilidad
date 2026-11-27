@@ -145,16 +145,22 @@
 
     .doors-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       gap: 8px;
       margin-top: 10px;
+    }
+
+    @media (max-width: 520px) {
+      .doors-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
     }
 
     .door-pill {
       background: #fff;
       border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 8px;
+      padding: 8px 6px;
       text-align: center;
     }
 
@@ -835,12 +841,16 @@
             <strong id="doorStart">21:00</strong>
           </div>
           <div class="door-pill">
-            <span>VIP (-1h30)</span>
-            <strong id="doorVip">19:30</strong>
+            <span id="doorOpenLabel">Apertura puertas</span>
+            <strong id="doorOpen">20:00</strong>
           </div>
-          <div class="door-pill" id="genBox">
-            <span id="genLabel">General (-1h)</span>
-            <strong id="doorGen">20:00</strong>
+          <div class="door-pill">
+            <span>Descanso</span>
+            <strong id="doorHalftime">21:45</strong>
+          </div>
+          <div class="door-pill">
+            <span>Finalización</span>
+            <strong id="doorEnd">22:45</strong>
           </div>
         </div>
       </div>
@@ -1037,6 +1047,9 @@
       partido: "Sevilla FC - Málaga CF",
       fechaTexto: "Lunes, 7 de diciembre de 2026 · 21:00",
       horaInicio: "21:00",
+      aperturaOffsetMins: -60,
+      descansoOffsetMins: 45,
+      finalizacionOffsetMins: 105,
       confirmado: false,
       altoRiesgo: false
     };
@@ -1278,12 +1291,12 @@
       checkSupabaseSession();
     }
 
-    function computeDoors() {
-      const [hh, mm] = state.horaInicio.split(":").map(Number);
+    function computeMatchSchedule() {
+      const [hh, mm] = normalizeHHMM(state.horaInicio, "21:00").split(":").map(Number);
       const startMin = hh * 60 + mm;
-      const vipMin = startMin - 90;
-      const genOffset = state.altoRiesgo ? 90 : 60;
-      const genMin = startMin - genOffset;
+      const openOffset = state.altoRiesgo ? -90 : (MATCH_INFO.aperturaOffsetMins ?? -60);
+      const halftimeOffset = MATCH_INFO.descansoOffsetMins ?? 45;
+      const endOffset = MATCH_INFO.finalizacionOffsetMins ?? 105;
 
       const fmt = (mins) => {
         const wrapped = ((mins % 1440) + 1440) % 1440;
@@ -1292,18 +1305,18 @@
 
       return {
         start: fmt(startMin),
-        vip: fmt(vipMin),
-        gen: fmt(genMin),
-        genLabel: state.altoRiesgo ? "General (-1h30)" : "General (-1h)"
+        open: fmt(startMin + openOffset),
+        halftime: fmt(startMin + halftimeOffset),
+        end: fmt(startMin + endOffset)
       };
     }
 
     function renderMatchDoors() {
-      const d = computeDoors();
-      document.getElementById("doorStart").textContent = d.start;
-      document.getElementById("doorVip").textContent = d.vip;
-      document.getElementById("doorGen").textContent = d.gen;
-      document.getElementById("genLabel").textContent = d.genLabel;
+      const s = computeMatchSchedule();
+      document.getElementById("doorStart").textContent = s.start;
+      document.getElementById("doorOpen").textContent = s.open;
+      document.getElementById("doorHalftime").textContent = s.halftime;
+      document.getElementById("doorEnd").textContent = s.end;
 
       const badge = document.getElementById("confirmBadge");
       if (state.confirmado) {
@@ -1821,7 +1834,7 @@
 
       if (mine && mine.disponible && mine.barraAsignada) {
         const horaEntrada = normalizeHHMM(mine.horaEntrada, "—");
-        const horaSalida = addHoursToHHMM(MATCH_INFO.horaInicio, 2);
+        const horaSalida = computeMatchSchedule().end;
         const totalHoras = computeShiftHours(horaEntrada, horaSalida);
         const rolTexto = getRoleDisplayName(normalizeRoleKey(mine.puestoRol));
 
@@ -2330,7 +2343,7 @@
     function renderFinalConvocatoriaSheet() {
       const wrap = document.getElementById("finalSheetTableWrap");
       const badge = document.getElementById("finalAssignedCountBadge");
-      const horaSalida = addHoursToHHMM(MATCH_INFO.horaInicio, 2);
+      const horaSalida = computeMatchSchedule().end;
       const assignedRows = getOrderedAssignedRows();
 
       badge.textContent = `${assignedRows.length} asignados`;
@@ -2403,7 +2416,7 @@
     function renderSignSheet() {
       const wrap = document.getElementById("signSheetTableWrap");
       const badge = document.getElementById("signAssignedCountBadge");
-      const horaSalida = addHoursToHHMM(MATCH_INFO.horaInicio, 2);
+      const horaSalida = computeMatchSchedule().end;
       const assignedRows = getOrderedAssignedRows();
 
       badge.textContent = `${assignedRows.length} asignados`;
