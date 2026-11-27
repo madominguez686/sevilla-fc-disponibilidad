@@ -648,7 +648,28 @@
       btn.textContent = "Entrar a mi ficha";
 
       if (error) {
-        showBanner("loginMsg", `Acceso denegado: ${error.message}`, "err"); return; }  const signedEmail = data?.user?.email \vert{}\vert{} email; await resolveAndOpenUserByEmail(signedEmail); }  async function openAppForUser(user) { state.currentUser = user; document.getElementById("loginCard").classList.add("hidden"); document.getElementById("mainApp").classList.remove("hidden");  const esEncargadoZona = isZoneManagerRole(user.rol); const etiquetaRol = esEncargadoZona ? "Encargado de zona" : (user.rol === "encargado" \vert{}\vert{} user.rol === "encargados") ? "Encargado" : "Camarero";  document.getElementById("sessionUserTitle").textContent = user.nombre; document.getElementById("sessionUserMeta").textContent = `Ficha #${user.ficha} · ${user.zona} ·${etiquetaRol}`;
+        showBanner("loginMsg", `Acceso denegado: ${error.message}`, "err");
+        return;
+      }
+
+      const signedEmail = data?.user?.email || email;
+      await resolveAndOpenUserByEmail(signedEmail);
+    }
+
+    async function openAppForUser(user) {
+      state.currentUser = user;
+      document.getElementById("loginCard").classList.add("hidden");
+      document.getElementById("mainApp").classList.remove("hidden");
+
+      const esEncargadoZona = isZoneManagerRole(user.rol);
+      const etiquetaRol = esEncargadoZona
+        ? "Encargado de zona"
+        : (user.rol === "encargado" || user.rol === "encargados")
+          ? "Encargado"
+          : "Camarero";
+
+      document.getElementById("sessionUserTitle").textContent = user.nombre;
+      document.getElementById("sessionUserMeta").textContent = `Ficha #${user.ficha} · ${user.zona} · ${etiquetaRol}`;
 
       const roleTabs = document.getElementById("roleTabs");
 
@@ -701,7 +722,81 @@
 
       if (error) {
         document.getElementById("encList").innerHTML =
-          `<div style="font-size:13px;color:var(--bad);padding:10px 0;">Error cargando convocatorias: ${error.message}</div>`; return; }  const { data: emps } = await sbClient .from("empleados") .select("*");  const byId = new Map(); (emps \vert{}\vert{} []).forEach((e) => { if (e.id) byId.set(String(e.id), e); });  const merged = {}; (convs \vert{}\vert{} []).forEach((row) => { const empDb = byId.get(String(row.empleado_id)); const fallback = STAFF.find( (s) => empDb?.email && s.email.toLowerCase() === empDb.email.toLowerCase() );  const ficha = String(empDb?.numero_ficha ?? empDb?.ficha ?? fallback?.ficha ?? row.empleado_id ?? "—"); const nombre = empDb?.nombre_mostrar ?? empDb?.nombre ?? empDb?.nombre_completo ?? fallback?.nombre ?? "Empleado"; const zona = empDb?.zona_asignada ?? empDb?.zona ?? empDb?.area ?? fallback?.zona ?? "Sin zona";  merged[ficha] = { ficha, nombre, zona, disponible: Boolean(row.disponible), margen: row.margen_horas \vert{}\vert{} (row.disponible ? "5 horas" : "No disponible"), actualizado: "Guardado en BD" }; });  state.availabilities = merged; }  function logoutUser() { state.currentUser = null; state.availabilities = {}; document.getElementById("loginPassword").value = ""; document.getElementById("loginMsg").className = "status-banner"; sbClient.auth.signOut().catch(() => {}); document.getElementById("mainApp").classList.add("hidden"); document.getElementById("loginCard").classList.remove("hidden"); }  async function switchTab(tab) { const esEncargadoZona = isZoneManagerRole(state.currentUser?.rol); if (esEncargadoZona) { document.getElementById("roleTabs").classList.add("hidden"); document.getElementById("viewEmp").classList.add("hidden"); document.getElementById("viewEnc").classList.remove("hidden"); await loadAllAvailabilitiesForManager(); renderEncargadoList(); return; }  const isEmp = tab === "emp"; document.getElementById("tabEmp").classList.toggle("active", isEmp); document.getElementById("tabEnc").classList.toggle("active", !isEmp); document.getElementById("viewEmp").classList.toggle("hidden", !isEmp); document.getElementById("viewEnc").classList.toggle("hidden", isEmp); if (!isEmp) { if (state.currentUser && (state.currentUser.rol === "encargado" \vert{}\vert{} state.currentUser.rol === "encargados" \vert{}\vert{} state.currentUser.rol === "admin")) { await loadAllAvailabilitiesForManager(); } renderEncargadoList(); } }  function loadEmployeeFicha(user) { document.getElementById("empName").textContent = user.nombre; document.getElementById("empZoneRole").textContent = `${user.zona} · Ficha exclusiva para ${user.email}`; document.getElementById("empFichaBadge").textContent = `Ficha #${user.ficha}`;
+          `<div style="font-size:13px;color:var(--bad);padding:10px 0;">Error cargando convocatorias: ${error.message}</div>`;
+        return;
+      }
+
+      const { data: emps } = await sbClient
+        .from("empleados")
+        .select("*");
+
+      const byId = new Map();
+      (emps || []).forEach((e) => {
+        if (e.id) byId.set(String(e.id), e);
+      });
+
+      const merged = {};
+      (convs || []).forEach((row) => {
+        const empDb = byId.get(String(row.empleado_id));
+        const fallback = STAFF.find(
+          (s) => empDb?.email && s.email.toLowerCase() === empDb.email.toLowerCase()
+        );
+
+        const ficha = String(empDb?.numero_ficha ?? empDb?.ficha ?? fallback?.ficha ?? row.empleado_id ?? "—");
+        const nombre = empDb?.nombre_mostrar ?? empDb?.nombre ?? empDb?.nombre_completo ?? fallback?.nombre ?? "Empleado";
+        const zona = empDb?.zona_asignada ?? empDb?.zona ?? empDb?.area ?? fallback?.zona ?? "Sin zona";
+
+        merged[ficha] = {
+          ficha,
+          nombre,
+          zona,
+          disponible: Boolean(row.disponible),
+          margen: row.margen_horas || (row.disponible ? "5 horas" : "No disponible"),
+          actualizado: "Guardado en BD"
+        };
+      });
+
+      state.availabilities = merged;
+    }
+
+    function logoutUser() {
+      state.currentUser = null;
+      state.availabilities = {};
+      document.getElementById("loginPassword").value = "";
+      document.getElementById("loginMsg").className = "status-banner";
+      sbClient.auth.signOut().catch(() => {});
+      document.getElementById("mainApp").classList.add("hidden");
+      document.getElementById("loginCard").classList.remove("hidden");
+    }
+
+    async function switchTab(tab) {
+      const esEncargadoZona = isZoneManagerRole(state.currentUser?.rol);
+      if (esEncargadoZona) {
+        document.getElementById("roleTabs").classList.add("hidden");
+        document.getElementById("viewEmp").classList.add("hidden");
+        document.getElementById("viewEnc").classList.remove("hidden");
+        await loadAllAvailabilitiesForManager();
+        renderEncargadoList();
+        return;
+      }
+
+      const isEmp = tab === "emp";
+      document.getElementById("tabEmp").classList.toggle("active", isEmp);
+      document.getElementById("tabEnc").classList.toggle("active", !isEmp);
+      document.getElementById("viewEmp").classList.toggle("hidden", !isEmp);
+      document.getElementById("viewEnc").classList.toggle("hidden", isEmp);
+      if (!isEmp) {
+        if (state.currentUser && (state.currentUser.rol === "encargado" || state.currentUser.rol === "encargados" || state.currentUser.rol === "admin")) {
+          await loadAllAvailabilitiesForManager();
+        }
+        renderEncargadoList();
+      }
+    }
+
+    function loadEmployeeFicha(user) {
+      document.getElementById("empName").textContent = user.nombre;
+      document.getElementById("empZoneRole").textContent = `${user.zona} · Ficha exclusiva para ${user.email}`;
+      document.getElementById("empFichaBadge").textContent = `Ficha #${user.ficha}`;
       document.getElementById("empMsg").className = "status-banner";
 
       const prev = state.availabilities[user.ficha];
@@ -772,4 +867,33 @@
         return;
       }
 
-      showBanner("empMsg", `Ficha de ${user.nombre} (#${user.ficha}) guardada como${payload.disponible ? "DISPONIBLE (" + payload
+      showBanner("empMsg", `Ficha de ${user.nombre} (#${user.ficha}) guardada como ${payload.disponible ? "DISPONIBLE (" + payload.margen + ")" : "NO DISPONIBLE"}.`, "ok");
+      renderEncargadoList();
+    }
+
+    function renderEncargadoList() {
+      const listEl = document.getElementById("encList");
+      const items = Object.values(state.availabilities);
+      const okCount = items.filter((i) => i.disponible).length;
+      document.getElementById("encCount").textContent = `${okCount} disponibles`;
+
+      if (!items.length) {
+        listEl.innerHTML = `<div style="font-size:13px;color:var(--muted);padding:10px 0;">Aún no hay respuestas guardadas para LFP27.15.</div>`;
+        return;
+      }
+
+      listEl.innerHTML = items.map((it) => `
+        <div class="person-item">
+          <div>
+            <strong>${it.nombre}</strong> <span style="color:var(--muted);font-size:12px;">(#${it.ficha} · ${it.zona})</span>
+            <div style="font-size:12px;color:var(--muted);">Margen: ${it.margen} · ${it.actualizado}</div>
+          </div>
+          <span class="pill-mini ${it.disponible ? "pill-ok" : "pill-no"}">${it.disponible ? "Disponible" : "No disp."}</span>
+        </div>
+      `).join("");
+    }
+
+    init();
+  </script>
+</body>
+</html>
