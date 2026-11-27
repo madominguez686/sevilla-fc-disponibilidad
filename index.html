@@ -383,27 +383,45 @@
       color: #991b1b;
     }
 
-    .margins {
+    .avail-scope-grid {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 6px;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
       margin-top: 6px;
     }
 
-    .margin-btn {
-      padding: 9px 4px;
-      border-radius: 9px;
-      border: 1px solid #d1d5db;
+    .scope-btn {
+      padding: 10px 8px;
+      border-radius: 10px;
+      border: 1.5px solid #d1d5db;
       background: #fff;
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 800;
+      color: #374151;
       cursor: pointer;
+      text-align: center;
     }
 
-    .margin-btn.active {
-      background: var(--sfc);
-      color: #fff;
+    .scope-btn.active {
       border-color: var(--sfc);
+      background: var(--sfc-soft);
+      color: var(--sfc-dark);
+    }
+
+    .since-box {
+      margin-top: 10px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: #f9fafb;
+    }
+
+    .since-row {
+      display: grid;
+      grid-template-columns: 1fr 120px;
+      gap: 10px;
+      align-items: center;
+      margin-top: 6px;
     }
 
     .primary-btn {
@@ -891,9 +909,24 @@
           </div>
         </div>
 
-        <div id="marginSection" class="field-gap">
-          <label>Margen de horas disponible</label>
-          <div class="margins" id="marginButtons"></div>
+        <div id="availabilityDetailSection" class="field-gap">
+          <label>Tipo de disponibilidad</label>
+          <div class="avail-scope-grid">
+            <button id="btnScopeTotal" class="scope-btn" type="button" onclick="setAvailabilityScope('total')">
+              Disponibilidad total
+            </button>
+            <button id="btnScopeSince" class="scope-btn" type="button" onclick="setAvailabilityScope('desde')">
+              Disponibilidad desde las
+            </button>
+          </div>
+
+          <div id="sinceHourBox" class="since-box hidden">
+            <label for="sinceHourSelect" style="margin: 0;">Disponibilidad desde las (tramos cada 15 min)</label>
+            <div class="since-row">
+              <span style="font-size: 12px; color: var(--muted);">Indica a partir de qué hora puedes incorporarte:</span>
+              <select id="sinceHourSelect" onchange="onSinceHourChange(this.value)"></select>
+            </div>
+          </div>
         </div>
 
         <button class="primary-btn" type="button" onclick="saveMyAvailability()">Guardar mi disponibilidad</button>
@@ -1144,6 +1177,19 @@
       }).format(amountValue);
     }
 
+    function parseAvailabilityFromStored(margenText, disponible) {
+      if (!disponible) {
+        return { scope: "total", sinceHour: "18:00", label: "No disponible" };
+      }
+      const txt = String(margenText || "").trim();
+      const match = txt.match(/(\d{1,2}:\d{2})/);
+      if (match) {
+        const hhmm = normalizeHHMM(match[1], "18:00");
+        return { scope: "desde", sinceHour: hhmm, label: `Desde las ${hhmm}` };
+      }
+      return { scope: "total", sinceHour: "18:00", label: "Disponibilidad total" };
+    }
+
     const TIME_SLOTS = buildQuarterHourSlots("15:00", "23:45");
 
     const STAFF = [
@@ -1164,7 +1210,6 @@
       { id: null, ficha: "010", nombre: "Mario Lobon Estudillo", zona: "Preferencia", rol: "encargado_zona", email: "mdominguezbaena@gmail.com" }
     ];
 
-    const MARGINS = ["2 horas", "3 horas", "4 horas", "5 horas", "6 horas"];
     const LOCAL_VISIBILITY_KEY = `sfc_conv_visible_${MATCH_INFO.codigo}`;
     const LOCAL_DROPS_KEY = `sfc_conv_drops_${MATCH_INFO.codigo}`;
 
@@ -1188,7 +1233,8 @@
       horaInicio: MATCH_INFO.horaInicio,
       currentUser: null,
       draftAvailable: null,
-      draftMargin: "5 horas",
+      draftScope: "total",
+      draftSinceHour: "18:00",
       allEmployees: [],
       availabilities: {},
       pendingCollapsed: false,
@@ -1229,21 +1275,15 @@
         `Personal que ya ha indicado su respuesta para el ${MATCH_INFO.partido}.`;
     }
 
+    function populateSinceHourSelect() {
+      const sel = document.getElementById("sinceHourSelect");
+      sel.innerHTML = TIME_SLOTS.map((t) => `<option value="${t}">${t}</option>`).join("");
+      sel.value = state.draftSinceHour;
+    }
+
     function init() {
       applyMatchHeaderTexts();
-
-      const mWrap = document.getElementById("marginButtons");
-      MARGINS.forEach((m) => {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "margin-btn";
-        btn.textContent = m;
-        btn.onclick = () => {
-          state.draftMargin = m;
-          renderMargins();
-        };
-        mWrap.appendChild(btn);
-      });
+      populateSinceHourSelect();
 
       document.getElementById("loginPassword").addEventListener("keydown", (e) => {
         if (e.key === "Enter") loginWithPassword();
@@ -1481,14 +1521,16 @@
           : null;
 
         if (mine) {
+          const disp = Boolean(mine.disponible);
+          const parsed = parseAvailabilityFromStored(mine.margen_horas, disp);
           state.availabilities[String(user.id)] = {
             convocatoriaId: mine.id,
             empleadoId: String(user.id),
             ficha: user.ficha,
             nombre: user.nombre,
             zona: user.zona,
-            disponible: Boolean(mine.disponible),
-            margen: mine.margen_horas || (mine.disponible ? "5 horas" : "No disponible"),
+            disponible: disp,
+            margen: parsed.label,
             barraAsignada: mine.barra_asignada || "",
             horaEntrada: normalizeHHMM(mine.hora_entrada, "19:30"),
             puestoRol: normalizeRoleKey(mine.puesto_rol || user.rol)
@@ -1552,6 +1594,7 @@
         const rolNormalizado = normalizeRoleKey(row.puesto_rol || empDb?.rol || "camarero");
         const disponible = Boolean(row.disponible);
         const barraAsignada = disponible ? (row.barra_asignada || "") : "";
+        const parsed = parseAvailabilityFromStored(row.margen_horas, disponible);
 
         const record = {
           convocatoriaId: row.id,
@@ -1560,7 +1603,7 @@
           nombre,
           zona,
           disponible,
-          margen: row.margen_horas || (disponible ? "5 horas" : "No disponible"),
+          margen: parsed.label,
           barraAsignada,
           horaEntrada: horaClean,
           puestoRol: rolNormalizado
@@ -1587,7 +1630,6 @@
         }
       });
 
-      // Si hay alertas de baja sobre puesto asignado, garantizamos el hueco libre en su barra
       (state.dropAlerts || []).forEach((al) => {
         if (!al.barra || al.cubierto) return;
         const currentRec = merged[String(al.empleadoId)];
@@ -1799,6 +1841,14 @@
       showBanner("empMsg", "Estado de convocatoria actualizado.", "ok");
     }
 
+    function getDraftAvailabilityLabel() {
+      if (state.draftAvailable === false) return "No disponible";
+      if (state.draftScope === "desde") {
+        return `Desde las ${normalizeHHMM(state.draftSinceHour, "18:00")}`;
+      }
+      return "Disponibilidad total";
+    }
+
     function loadEmployeeFicha(user) {
       document.getElementById("empName").textContent = user.nombre;
       document.getElementById("empZoneRole").textContent = `${user.zona} · Ficha exclusiva para ${user.email}`;
@@ -1807,33 +1857,55 @@
 
       const prev = user.id ? state.availabilities[String(user.id)] : null;
       state.draftAvailable = prev ? prev.disponible : null;
-      state.draftMargin = prev && prev.margen && prev.margen !== "No disponible" ? prev.margen : "5 horas";
+      const parsed = parseAvailabilityFromStored(prev?.margen, prev?.disponible !== false);
+      state.draftScope = parsed.scope;
+      state.draftSinceHour = parsed.sinceHour;
 
       renderEmployeeConvocatoriaStatus();
       renderChoiceButtons();
-      renderMargins();
+      renderAvailabilityScope();
     }
 
     function setAvailable(val) {
       state.draftAvailable = val;
+      if (val === true && !state.draftScope) {
+        state.draftScope = "total";
+      }
       renderChoiceButtons();
+      renderAvailabilityScope();
+    }
+
+    function setAvailabilityScope(scope) {
+      state.draftScope = scope === "desde" ? "desde" : "total";
+      renderAvailabilityScope();
+    }
+
+    function onSinceHourChange(val) {
+      state.draftSinceHour = normalizeHHMM(val, "18:00");
     }
 
     function renderChoiceButtons() {
       const yes = document.getElementById("btnYes");
       const no = document.getElementById("btnNo");
-      const marginSec = document.getElementById("marginSection");
+      const detailSec = document.getElementById("availabilityDetailSection");
 
       yes.className = "choice-btn" + (state.draftAvailable === true ? " active-yes" : "");
       no.className = "choice-btn" + (state.draftAvailable === false ? " active-no" : "");
-      marginSec.style.display = state.draftAvailable === false ? "none" : "block";
+      detailSec.style.display = state.draftAvailable === false ? "none" : "block";
     }
 
-    function renderMargins() {
-      const btns = document.querySelectorAll(".margin-btn");
-      btns.forEach((b) => {
-        b.classList.toggle("active", b.textContent === state.draftMargin);
-      });
+    function renderAvailabilityScope() {
+      const btnTotal = document.getElementById("btnScopeTotal");
+      const btnSince = document.getElementById("btnScopeSince");
+      const sinceBox = document.getElementById("sinceHourBox");
+      const sel = document.getElementById("sinceHourSelect");
+
+      btnTotal.classList.toggle("active", state.draftScope === "total");
+      btnSince.classList.toggle("active", state.draftScope === "desde");
+      sinceBox.classList.toggle("hidden", state.draftScope !== "desde");
+      if (sel) {
+        sel.value = normalizeHHMM(state.draftSinceHour, "18:00");
+      }
     }
 
     async function saveMyAvailability() {
@@ -1866,6 +1938,7 @@
       }
 
       const nextBarra = turningUnavailable ? "" : (prev?.barraAsignada || "");
+      const disponibilidadTexto = getDraftAvailabilityLabel();
 
       const payload = {
         ...(prev || {}),
@@ -1874,7 +1947,7 @@
         nombre: user.nombre,
         zona: user.zona,
         disponible: state.draftAvailable,
-        margen: state.draftAvailable ? state.draftMargin : "No disponible",
+        margen: disponibilidadTexto,
         barraAsignada: nextBarra
       };
 
