@@ -470,7 +470,7 @@
       { id: null, ficha: "114", nombre: "Alejandro Vallejos", zona: "Gol Norte", rol: "camarero", email: "alejandro.vallejos@prueba.local" },
       { id: null, ficha: "140", nombre: "Ana González Pérez", zona: "Preferencia", rol: "camarero", email: "ana.gonzalez@prueba.local" },
       { id: null, ficha: "141", nombre: "Ana Jiménez Martín", zona: "Fondo", rol: "camarero", email: "ana.jimenez@prueba.local" },
-      { id: null, ficha: "197", nombre: "Carmen Girón López", zona: "Gol Sur", rol: "camarero", email: "miguelitoergrande@gmail.com" },
+      { id: null, ficha: "99", nombre: "Carmen Girón Romero", zona: "Preferencia", rol: "camarero", email: "miguelitoergrande@gmail.com" },
       { id: null, ficha: "95", nombre: "Gabriela Medina Ruiz", zona: "Preferencia", rol: "camarero", email: "gabriela.medina@prueba.local" },
       { id: null, ficha: "191", nombre: "Laura López Díaz", zona: "Fondo", rol: "camarero", email: "laura.lopez@prueba.local" },
       { id: null, ficha: "120", nombre: "Marcos Maqueda Romero", zona: "Gol Norte", rol: "camarero", email: "marcos.maqueda@prueba.local" },
@@ -577,7 +577,7 @@
       const localFallback = STAFF.find((u) => u.email.toLowerCase() === normalized);
       return {
         id: data.id ?? localFallback?.id ?? null,
-        ficha: String(data.numero_ficha ?? data.ficha ?? localFallback?.ficha ?? "—"),
+        ficha: String(data.numero_ficha ?? data.ficha ?? data.codigo_empleado ?? localFallback?.ficha ?? "—"),
         nombre: data.nombre_mostrar ?? data.nombre ?? data.nombre_completo ?? localFallback?.nombre ?? normalized,
         zona: data.zona_asignada ?? data.zona ?? data.area ?? localFallback?.zona ?? "Sin zona",
         rol: (data.rol ?? localFallback?.rol ?? "camarero").toLowerCase(),
@@ -721,14 +721,22 @@
         .eq("partido_id", "LFP27.15");
 
       if (error) {
+        state.availabilities = {};
         document.getElementById("encList").innerHTML =
           `<div style="font-size:13px;color:var(--bad);padding:10px 0;">Error cargando convocatorias: ${error.message}</div>`;
         return;
       }
 
-      const { data: emps } = await sbClient
+      const { data: emps, error: empError } = await sbClient
         .from("empleados")
         .select("*");
+
+      if (empError) {
+        state.availabilities = {};
+        document.getElementById("encList").innerHTML =
+          `<div style="font-size:13px;color:var(--bad);padding:10px 0;">Error cargando empleados: ${empError.message}</div>`;
+        return;
+      }
 
       const byId = new Map();
       (emps || []).forEach((e) => {
@@ -742,9 +750,13 @@
           (s) => empDb?.email && s.email.toLowerCase() === empDb.email.toLowerCase()
         );
 
-        const ficha = String(empDb?.numero_ficha ?? empDb?.ficha ?? fallback?.ficha ?? row.empleado_id ?? "—");
-        const nombre = empDb?.nombre_mostrar ?? empDb?.nombre ?? empDb?.nombre_completo ?? fallback?.nombre ?? "Empleado";
-        const zona = empDb?.zona_asignada ?? empDb?.zona ?? empDb?.area ?? fallback?.zona ?? "Sin zona";
+        const ficha = String(
+          empDb?.numero_ficha ?? empDb?.ficha ?? empDb?.codigo_empleado ?? fallback?.ficha ?? row.empleado_id ?? "—"
+        );
+        const nombre =
+          empDb?.nombre_mostrar ?? empDb?.nombre ?? empDb?.nombre_completo ?? fallback?.nombre ?? "Empleado";
+        const zona =
+          empDb?.zona_asignada ?? empDb?.zona ?? empDb?.area ?? fallback?.zona ?? "Sin zona";
 
         merged[ficha] = {
           ficha,
