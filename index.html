@@ -330,6 +330,30 @@
       background: var(--warn-soft);
     }
 
+    .drop-alert-box {
+      margin-top: 10px;
+      padding: 11px 13px;
+      border-radius: 12px;
+      border: 1.5px solid #fca5a5;
+      background: var(--bad-soft);
+      color: #991b1b;
+      font-size: 12px;
+    }
+
+    .drop-alert-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 0;
+      border-bottom: 1px solid #fecaca;
+    }
+
+    .drop-alert-item:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
     .choice-group {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -684,9 +708,14 @@
       border-radius: 11px;
       padding: 9px 10px;
       display: grid;
-      grid-template-columns: 92px 1.5fr 110px auto;
+      grid-template-columns: 110px 1.5fr 110px auto;
       gap: 8px;
       align-items: center;
+    }
+
+    .slot-row.free-slot {
+      border-color: #fca5a5;
+      background: #fff8f8;
     }
 
     @media (max-width: 640px) {
@@ -708,6 +737,11 @@
     .slot-role-tag.camarero {
       background: #fff1f4;
       color: var(--sfc-dark);
+    }
+
+    .slot-role-tag.free {
+      background: var(--bad-soft);
+      color: #991b1b;
     }
 
     .hidden { display: none !important; }
@@ -873,7 +907,10 @@
             <div class="card">
               <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
                 <h2 style="margin: 0; font-size: 15px;">Disponibilidad comunicada</h2>
-                <span id="encCount" class="pill-mini pill-ok">0 disponibles</span>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span id="encCount" class="pill-mini pill-ok">0 disponibles</span>
+                  <button class="mini-toggle-btn" type="button" onclick="refreshManagerData()">Actualizar datos</button>
+                </div>
               </div>
               <p id="respondedMatchSubtitle" style="margin: 4px 0 6px; font-size: 12px; color: var(--muted);">
                 Personal que ya ha indicado su respuesta para el Sevilla FC - Málaga CF.
@@ -920,6 +957,7 @@
               </label>
             </div>
 
+            <div id="dropAlertsBox" class="drop-alert-box hidden"></div>
             <div id="encMsg" class="status-banner"></div>
             <div id="postsAssemblyList"></div>
           </div>
@@ -1128,6 +1166,21 @@
 
     const MARGINS = ["2 horas", "3 horas", "4 horas", "5 horas", "6 horas"];
     const LOCAL_VISIBILITY_KEY = `sfc_conv_visible_${MATCH_INFO.codigo}`;
+    const LOCAL_DROPS_KEY = `sfc_conv_drops_${MATCH_INFO.codigo}`;
+
+    function loadDropAlerts() {
+      try {
+        const raw = localStorage.getItem(LOCAL_DROPS_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (_) {
+        return [];
+      }
+    }
+
+    function saveDropAlerts(alerts) {
+      localStorage.setItem(LOCAL_DROPS_KEY, JSON.stringify(alerts));
+    }
 
     let state = {
       confirmado: MATCH_INFO.confirmado,
@@ -1141,7 +1194,8 @@
       pendingCollapsed: false,
       zoneSubView: "montar",
       postConfigs: {},
-      convocatoriaVisible: localStorage.getItem(LOCAL_VISIBILITY_KEY) === "true"
+      convocatoriaVisible: localStorage.getItem(LOCAL_VISIBILITY_KEY) === "true",
+      dropAlerts: loadDropAlerts()
     };
 
     const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -1496,6 +1550,8 @@
         const zona = empDb?.zona ?? "Sin zona";
         const horaClean = normalizeHHMM(row.hora_entrada, "19:30");
         const rolNormalizado = normalizeRoleKey(row.puesto_rol || empDb?.rol || "camarero");
+        const disponible = Boolean(row.disponible);
+        const barraAsignada = disponible ? (row.barra_asignada || "") : "";
 
         const record = {
           convocatoriaId: row.id,
@@ -1503,32 +1559,64 @@
           ficha,
           nombre,
           zona,
-          disponible: Boolean(row.disponible),
-          margen: row.margen_horas || (row.disponible ? "5 horas" : "No disponible"),
-          barraAsignada: row.barra_asignada || "",
+          disponible,
+          margen: row.margen_horas || (disponible ? "5 horas" : "No disponible"),
+          barraAsignada,
           horaEntrada: horaClean,
           puestoRol: rolNormalizado
         };
 
         merged[empIdStr] = record;
 
-        if (record.disponible && record.barraAsignada) {
-          if (!configs[record.barraAsignada]) {
-            configs[record.barraAsignada] = { encCount: 0, camCount: 0, slots: [] };
+        if (disponible && barraAsignada) {
+          if (!configs[barraAsignada]) {
+            configs[barraAsignada] = { encCount: 0, camCount: 0, slots: [] };
           }
           const isEncSlot = rolNormalizado === "encargado" || rolNormalizado === "encargado_zona";
           if (isEncSlot) {
-            configs[record.barraAsignada].encCount += 1;
+            configs[barraAsignada].encCount += 1;
           } else {
-            configs[record.barraAsignada].camCount += 1;
+            configs[barraAsignada].camCount += 1;
           }
-          configs[record.barraAsignada].slots.push({
+          configs[barraAsignada].slots.push({
             rol: isEncSlot ? "encargado" : "camarero",
             empleadoId: empIdStr,
-            hora: horaClean
+            hora: horaClean,
+            huecoLibre: false
           });
         }
       });
+
+      // Si hay alertas de baja sobre puesto asignado, garantizamos el hueco libre en su barra
+      (state.dropAlerts || []).forEach((al) => {
+        if (!al.barra || al.cubierto) return;
+        const currentRec = merged[String(al.empleadoId)];
+        if (currentRec && currentRec.disponible && currentRec.barraAsignada) {
+          al.cubierto = true;
+          return;
+        }
+        if (!configs[al.barra]) {
+          configs[al.barra] = { encCount: 0, camCount: 0, slots: [] };
+        }
+        const isEncSlot = normalizeRoleKey(al.rol) === "encargado";
+        const alreadyHasFreeSlot = configs[al.barra].slots.some(
+          (s) => !s.empleadoId && s.huecoLibre && s.rol === (isEncSlot ? "encargado" : "camarero")
+        );
+        if (!alreadyHasFreeSlot) {
+          if (isEncSlot) {
+            configs[al.barra].encCount += 1;
+          } else {
+            configs[al.barra].camCount += 1;
+          }
+          configs[al.barra].slots.push({
+            rol: isEncSlot ? "encargado" : "camarero",
+            empleadoId: "",
+            hora: normalizeHHMM(al.hora, "19:30"),
+            huecoLibre: true
+          });
+        }
+      });
+      saveDropAlerts(state.dropAlerts);
 
       if (foundVisibilityFlag) {
         state.convocatoriaVisible = anyVisibleInDb;
@@ -1537,6 +1625,12 @@
 
       state.availabilities = merged;
       state.postConfigs = configs;
+    }
+
+    async function refreshManagerData() {
+      await loadAllAvailabilitiesForManager();
+      renderZoneWorkspace();
+      showBanner("encMsg", "Datos actualizados desde Supabase.", "ok");
     }
 
     function renderVisibilityControl() {
@@ -1589,6 +1683,38 @@
           : "Convocatoria marcada como OCULTA: los empleados no verán asignaciones hasta que la publiques.",
         "ok"
       );
+    }
+
+    function renderDropAlerts() {
+      const box = document.getElementById("dropAlertsBox");
+      const activeAlerts = (state.dropAlerts || []).filter((a) => !a.cubierto);
+
+      if (!activeAlerts.length) {
+        box.classList.add("hidden");
+        box.innerHTML = "";
+        return;
+      }
+
+      box.classList.remove("hidden");
+      const itemsHtml = activeAlerts.map((a, idx) => `
+        <div class="drop-alert-item">
+          <div>
+            <strong>AVISO DE BAJA:</strong> ${a.nombre} (#${a.ficha}) ha cambiado a <strong>NO DISPONIBLE</strong> · Puesto liberado: <strong>${a.barra}</strong> (${a.hora}).
+          </div>
+          <button class="mini-toggle-btn" type="button" onclick="dismissDropAlert(${idx})">Marcar visto</button>
+        </div>
+      `).join("");
+
+      box.innerHTML = itemsHtml;
+    }
+
+    function dismissDropAlert(index) {
+      const activeAlerts = (state.dropAlerts || []).filter((a) => !a.cubierto);
+      const target = activeAlerts[index];
+      if (!target) return;
+      target.cubierto = true;
+      saveDropAlerts(state.dropAlerts);
+      renderDropAlerts();
     }
 
     function logoutUser() {
@@ -1719,6 +1845,28 @@
       }
 
       const prev = user.id ? state.availabilities[String(user.id)] : null;
+      const hadAssignedPost = Boolean(prev && prev.disponible && prev.barraAsignada);
+      const turningUnavailable = state.draftAvailable === false;
+
+      if (turningUnavailable && hadAssignedPost) {
+        const nextDrops = (state.dropAlerts || []).filter(
+          (a) => !(String(a.empleadoId) === String(user.id) && !a.cubierto)
+        );
+        nextDrops.push({
+          empleadoId: String(user.id),
+          ficha: user.ficha,
+          nombre: user.nombre,
+          barra: prev.barraAsignada,
+          rol: prev.puestoRol || user.rol,
+          hora: normalizeHHMM(prev.horaEntrada, "19:30"),
+          cubierto: false
+        });
+        state.dropAlerts = nextDrops;
+        saveDropAlerts(nextDrops);
+      }
+
+      const nextBarra = turningUnavailable ? "" : (prev?.barraAsignada || "");
+
       const payload = {
         ...(prev || {}),
         empleadoId: user.id ? String(user.id) : "",
@@ -1726,7 +1874,8 @@
         nombre: user.nombre,
         zona: user.zona,
         disponible: state.draftAvailable,
-        margen: state.draftAvailable ? state.draftMargin : "No disponible"
+        margen: state.draftAvailable ? state.draftMargin : "No disponible",
+        barraAsignada: nextBarra
       };
 
       if (user.id) {
@@ -1738,6 +1887,9 @@
         disponible: payload.disponible,
         margen_horas: payload.margen
       };
+      if (turningUnavailable) {
+        dbRow.barra_asignada = null;
+      }
       if (user.id) {
         dbRow.empleado_id = user.id;
       }
@@ -1752,7 +1904,14 @@
       }
 
       renderEmployeeConvocatoriaStatus();
-      showBanner("empMsg", `Ficha de ${user.nombre} (#${user.ficha}) guardada como ${payload.disponible ? "DISPONIBLE (" + payload.margen + ")" : "NO DISPONIBLE"}.`, "ok");
+      const dropNotice = (turningUnavailable && hadAssignedPost)
+        ? ` Se ha notificado la baja al encargado de zona y liberado el puesto (${prev.barraAsignada}).`
+        : "";
+      showBanner(
+        "empMsg",
+        `Ficha de ${user.nombre} (#${user.ficha}) guardada como ${payload.disponible ? "DISPONIBLE (" + payload.margen + ")" : "NO DISPONIBLE"}.${dropNotice}`,
+        "ok"
+      );
     }
 
     function togglePendingList() {
@@ -1787,13 +1946,20 @@
       }
 
       const rowsHtml = responded.map((r) => {
+        const hadDrop = (state.dropAlerts || []).some(
+          (a) => !a.cubierto && String(a.empleadoId) === String(r.empleadoId)
+        );
         const estadoPill = r.disponible
           ? `<span class="pill-mini pill-ok">Sí · ${r.margen}</span>`
-          : `<span class="pill-mini pill-no">No disp.</span>`;
+          : hadDrop
+            ? `<span class="pill-mini pill-no">Baja · No disp.</span>`
+            : `<span class="pill-mini pill-no">No disp.</span>`;
         const horaTxt = normalizeHHMM(r.horaEntrada, "");
         const puestoTxt = r.disponible
           ? (r.barraAsignada ? `<strong>${r.barraAsignada}</strong>${horaTxt ? ` (${horaTxt})` : ""}` : `<span style="color:var(--muted);">Sin asignar</span>`)
-          : `<span style="color:var(--muted);">—</span>`;
+          : hadDrop
+            ? `<span style="color:var(--bad);font-weight:700;">Hueco libre</span>`
+            : `<span style="color:var(--muted);">—</span>`;
 
         return `
           <tr>
@@ -1874,10 +2040,10 @@
 
       const nextSlots = [];
       for (let i = 0; i < safeEnc; i++) {
-        nextSlots.push(existingEnc[i] || { rol: "encargado", empleadoId: "", hora: "19:30" });
+        nextSlots.push(existingEnc[i] || { rol: "encargado", empleadoId: "", hora: "19:30", huecoLibre: false });
       }
       for (let i = 0; i < safeCam; i++) {
-        nextSlots.push(existingCam[i] || { rol: "camarero", empleadoId: "", hora: "20:00" });
+        nextSlots.push(existingCam[i] || { rol: "camarero", empleadoId: "", hora: "20:00", huecoLibre: false });
       }
 
       cfg.encCount = safeEnc;
@@ -1899,6 +2065,9 @@
       const cfg = ensurePostConfig(barra);
       if (!cfg.slots[slotIndex]) return;
       cfg.slots[slotIndex].empleadoId = empleadoId;
+      if (empleadoId) {
+        cfg.slots[slotIndex].huecoLibre = false;
+      }
       renderPostsAssembly();
     }
 
@@ -1944,7 +2113,17 @@
       empRecord.barraAsignada = barra;
       empRecord.horaEntrada = horaLimpia;
       empRecord.puestoRol = normalizeRoleKey(slot.rol);
+      slot.huecoLibre = false;
 
+      (state.dropAlerts || []).forEach((al) => {
+        if (!al.cubierto && al.barra === barra) {
+          al.cubierto = true;
+        }
+      });
+      saveDropAlerts(state.dropAlerts);
+
+      renderDropAlerts();
+      renderPostsAssembly();
       showBanner("encMsg", `Guardado: ${empRecord.nombre} en ${barra} (${slot.rol}) a las ${horaLimpia}.`, "ok");
       renderRespondedTable();
     }
@@ -1969,8 +2148,13 @@
             (d) => !takenElsewhere.has(String(d.empleadoId)) || String(d.empleadoId) === String(sl.empleadoId)
           );
 
+          const isFreeSlot = !sl.empleadoId && Boolean(sl.huecoLibre);
+          const placeholderText = isFreeSlot
+            ? `-- HUECO LIBRE por baja (${sl.rol}) --`
+            : `-- Elegir disponible (${sl.rol}) --`;
+
           const empOptions = [
-            `<option value="">-- Elegir disponible (${sl.rol}) --</option>`,
+            `<option value="">${placeholderText}</option>`,
             ...candidatePool.map((d) => {
               const selected = String(sl.empleadoId) === String(d.empleadoId) ? "selected" : "";
               return `<option value="${d.empleadoId}" ${selected}>${d.nombre} (#${d.ficha} · ${d.margen})</option>`;
@@ -1983,12 +2167,16 @@
             return `<option value="${t}" ${selected}>${t}</option>`;
           }).join("");
 
-          const roleLabel = sl.rol === "encargado" ? "Encargado" : "Camarero";
-          const roleClass = sl.rol === "encargado" ? "slot-role-tag" : "slot-role-tag camarero";
+          const roleLabel = isFreeSlot
+            ? "HUECO LIBRE"
+            : (sl.rol === "encargado" ? `Encargado #${sIdx + 1}` : `Camarero #${sIdx + 1}`);
+          const roleClass = isFreeSlot
+            ? "slot-role-tag free"
+            : (sl.rol === "encargado" ? "slot-role-tag" : "slot-role-tag camarero");
 
           return `
-            <div class="slot-row">
-              <span class="${roleClass}">${roleLabel} #${sIdx + 1}</span>
+            <div class="slot-row ${isFreeSlot ? "free-slot" : ""}">
+              <span class="${roleClass}">${roleLabel}</span>
               <select onchange="onSlotEmployeeChange('${post.barra}', ${sIdx}, this.value)">
                 ${empOptions}
               </select>
@@ -2189,6 +2377,7 @@
 
     function renderZoneWorkspace() {
       renderVisibilityControl();
+      renderDropAlerts();
       renderRespondedTable();
       renderPendingSection();
       renderPostsAssembly();
