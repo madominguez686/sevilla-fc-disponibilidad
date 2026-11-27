@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Disponibilidad Sevilla FC · LFP27.15</title>
+  <title>Disponibilidad Sevilla FC · Sevilla FC - Málaga CF</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
@@ -529,8 +529,8 @@
 
       <div class="match-box" style="color: var(--text);">
         <div class="match-title">
-          <span>Sevilla FC - Málaga CF</span>
-          <span class="pill-mini">LFP27.15</span>
+          <span id="matchTitleText">Sevilla FC - Málaga CF</span>
+          <span id="matchCodeBadge" class="pill-mini">LFP27.15</span>
         </div>
         <div style="font-size: 12px; color: var(--muted); margin-top: 4px;" id="matchDateLabel">
           Lunes, 7 de diciembre de 2026 · 21:00
@@ -597,7 +597,7 @@
         </div>
 
         <div class="field-gap">
-          <label>¿Estás disponible para el Sevilla FC - Málaga CF?</label>
+          <label id="empQuestionLabel">¿Estás disponible para el Sevilla FC - Málaga CF?</label>
           <div class="choice-group">
             <button id="btnYes" class="choice-btn" type="button" onclick="setAvailable(true)">Sí, disponible</button>
             <button id="btnNo" class="choice-btn" type="button" onclick="setAvailable(false)">No disponible</button>
@@ -621,8 +621,8 @@
                 <h2 style="margin: 0; font-size: 15px;">Disponibilidad comunicada</h2>
                 <span id="encCount" class="pill-mini pill-ok">0 disponibles</span>
               </div>
-              <p style="margin: 4px 0 6px; font-size: 12px; color: var(--muted);">
-                Personal que ya ha indicado su respuesta para LFP27.15.
+              <p id="respondedMatchSubtitle" style="margin: 4px 0 6px; font-size: 12px; color: var(--muted);">
+                Personal que ya ha indicado su respuesta para el Sevilla FC - Málaga CF.
               </p>
               <div id="respondedTableWrap"></div>
             </div>
@@ -662,7 +662,15 @@
     const SUPABASE_URL = "https://marrvzyyyguqnpvdkicz.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_dxD-ImtvorOIUrqZUZrREQ_keHGZ7tD";
 
-    // Orden estricto solicitado: 1. Almacen, 2. Bajas, 3. Entreplantas, 4. Altas
+    const MATCH_INFO = {
+      codigo: "LFP27.15",
+      partido: "Sevilla FC - Málaga CF",
+      fechaTexto: "Lunes, 7 de diciembre de 2026 · 21:00",
+      horaInicio: "21:00",
+      confirmado: false,
+      altoRiesgo: false
+    };
+
     const PUESTOS_ESTADIO = [
       // Preferencia
       { id: "pref_alm", zona: "Preferencia", categoria: "Almacen", planta: "Almacen", antigua: "Almacen", barra: "Almacen Preferencia", orden: 1 },
@@ -732,6 +740,14 @@
       return slots;
     }
 
+    function normalizeHHMM(val, fallback = "19:30") {
+      if (!val) return fallback;
+      const match = String(val).match(/(\d{1,2}:\d{2})/);
+      if (!match) return fallback;
+      const [hh, mm] = match[1].split(":");
+      return `${hh.padStart(2, "0")}:${mm}`;
+    }
+
     const TIME_SLOTS = buildQuarterHourSlots("15:00", "23:45");
 
     const STAFF = [
@@ -755,16 +771,15 @@
     const MARGINS = ["2 horas", "3 horas", "4 horas", "5 horas", "6 horas"];
 
     let state = {
-      confirmado: false,
-      altoRiesgo: false,
-      horaInicio: "21:00",
+      confirmado: MATCH_INFO.confirmado,
+      altoRiesgo: MATCH_INFO.altoRiesgo,
+      horaInicio: MATCH_INFO.horaInicio,
       currentUser: null,
       draftAvailable: null,
       draftMargin: "5 horas",
       allEmployees: [],
       availabilities: {},
       pendingCollapsed: false,
-      // postConfigs[barraName] = { encCount: 0, camCount: 0, slots: [{ rol: 'encargado'|'camarero', empleadoId: '', hora: '19:30' }] }
       postConfigs: {}
     };
 
@@ -789,7 +804,19 @@
       return [...list].sort((a, b) => a.orden - b.orden);
     }
 
+    function applyMatchHeaderTexts() {
+      document.title = `Disponibilidad Sevilla FC · ${MATCH_INFO.partido}`;
+      document.getElementById("matchTitleText").textContent = MATCH_INFO.partido;
+      document.getElementById("matchCodeBadge").textContent = MATCH_INFO.codigo;
+      document.getElementById("matchDateLabel").textContent = MATCH_INFO.fechaTexto;
+      document.getElementById("empQuestionLabel").textContent = `¿Estás disponible para el ${MATCH_INFO.partido}?`;
+      document.getElementById("respondedMatchSubtitle").textContent =
+        `Personal que ya ha indicado su respuesta para el ${MATCH_INFO.partido}.`;
+    }
+
     function init() {
+      applyMatchHeaderTexts();
+
       const mWrap = document.getElementById("marginButtons");
       MARGINS.forEach((m) => {
         const btn = document.createElement("button");
@@ -986,7 +1013,7 @@
       const { data } = await sbClient
         .from("convocatorias")
         .select("*")
-        .eq("partido_id", "LFP27.15")
+        .eq("partido_id", MATCH_INFO.codigo)
         .eq("empleado_id", user.id)
         .maybeSingle();
 
@@ -1000,7 +1027,7 @@
           disponible: Boolean(data.disponible),
           margen: data.margen_horas || (data.disponible ? "5 horas" : "No disponible"),
           barraAsignada: data.barra_asignada || "",
-          horaEntrada: data.hora_entrada || "19:30",
+          horaEntrada: normalizeHHMM(data.hora_entrada, "19:30"),
           puestoRol: data.puesto_rol || "camarero"
         };
       }
@@ -1010,7 +1037,7 @@
       const { data: convs, error } = await sbClient
         .from("convocatorias")
         .select("*")
-        .eq("partido_id", "LFP27.15");
+        .eq("partido_id", MATCH_INFO.codigo);
 
       if (error) {
         state.availabilities = {};
@@ -1050,6 +1077,7 @@
         const ficha = String(empDb?.ficha ?? empIdStr);
         const nombre = empDb?.nombre ?? "Empleado";
         const zona = empDb?.zona ?? "Sin zona";
+        const horaClean = normalizeHHMM(row.hora_entrada, "19:30");
 
         const record = {
           convocatoriaId: row.id,
@@ -1060,7 +1088,7 @@
           disponible: Boolean(row.disponible),
           margen: row.margen_horas || (row.disponible ? "5 horas" : "No disponible"),
           barraAsignada: row.barra_asignada || "",
-          horaEntrada: row.hora_entrada || "19:30",
+          horaEntrada: horaClean,
           puestoRol: (row.puesto_rol || "camarero").toLowerCase()
         };
 
@@ -1079,7 +1107,7 @@
           configs[record.barraAsignada].slots.push({
             rol: isEncSlot ? "encargado" : "camarero",
             empleadoId: empIdStr,
-            hora: record.horaEntrada || "19:30"
+            hora: horaClean
           });
         }
       });
@@ -1160,7 +1188,7 @@
       }
 
       const dbRow = {
-        partido_id: "LFP27.15",
+        partido_id: MATCH_INFO.codigo,
         disponible: payload.disponible,
         margen_horas: payload.margen
       };
@@ -1207,7 +1235,7 @@
       document.getElementById("encCount").textContent = `${disponibles.length} disponibles`;
 
       if (!responded.length) {
-        wrap.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:8px 0;">Nadie ha comunicado disponibilidad aún para LFP27.15.</div>`;
+        wrap.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:8px 0;">Nadie ha comunicado disponibilidad aún para ${MATCH_INFO.partido}.</div>`;
         return;
       }
 
@@ -1215,8 +1243,9 @@
         const estadoPill = r.disponible
           ? `<span class="pill-mini pill-ok">Sí · ${r.margen}</span>`
           : `<span class="pill-mini pill-no">No disp.</span>`;
+        const horaTxt = normalizeHHMM(r.horaEntrada, "");
         const puestoTxt = r.disponible
-          ? (r.barraAsignada ? `<strong>${r.barraAsignada}</strong> (${r.horaEntrada || "—"})` : `<span style="color:var(--muted);">Sin asignar</span>`)
+          ? (r.barraAsignada ? `<strong>${r.barraAsignada}</strong>${horaTxt ? ` (${horaTxt})` : ""}` : `<span style="color:var(--muted);">Sin asignar</span>`)
           : `<span style="color:var(--muted);">—</span>`;
 
         return `
@@ -1250,7 +1279,6 @@
       const btn = document.getElementById("togglePendingBtn");
       const badge = document.getElementById("pendingCountBadge");
 
-      // Excluimos encargados de zona de la lista de pendientes de disponibilidad
       const respondedIds = new Set(Object.keys(state.availabilities));
       const pending = (state.allEmployees || []).filter((emp) => {
         if (isZoneManagerRole(emp.rol)) return false;
@@ -1330,7 +1358,7 @@
     function onSlotHourChange(barra, slotIndex, hora) {
       const cfg = ensurePostConfig(barra);
       if (!cfg.slots[slotIndex]) return;
-      cfg.slots[slotIndex].hora = hora;
+      cfg.slots[slotIndex].hora = normalizeHHMM(hora, "19:30");
     }
 
     async function savePostSlot(barra, slotIndex) {
@@ -1349,14 +1377,16 @@
         return;
       }
 
+      const horaLimpia = normalizeHHMM(slot.hora, "19:30");
+
       const { error } = await sbClient
         .from("convocatorias")
         .update({
           barra_asignada: barra,
-          hora_entrada: slot.hora,
+          hora_entrada: horaLimpia,
           puesto_rol: slot.rol
         })
-        .eq("partido_id", "LFP27.15")
+        .eq("partido_id", MATCH_INFO.codigo)
         .eq("empleado_id", empRecord.empleadoId);
 
       if (error) {
@@ -1365,10 +1395,10 @@
       }
 
       empRecord.barraAsignada = barra;
-      empRecord.horaEntrada = slot.hora;
+      empRecord.horaEntrada = horaLimpia;
       empRecord.puestoRol = slot.rol;
 
-      showBanner("encMsg", `Guardado: ${empRecord.nombre} en ${barra} (${slot.rol}) a las ${slot.hora}.`, "ok");
+      showBanner("encMsg", `Guardado: ${empRecord.nombre} en ${barra} (${slot.rol}) a las ${horaLimpia}.`, "ok");
       renderRespondedTable();
     }
 
@@ -1382,7 +1412,7 @@
         return;
       }
 
-      container.innerHTML = posts.map((post, pIdx) => {
+      container.innerHTML = posts.map((post) => {
         const cfg = ensurePostConfig(post.barra);
         const safePostId = post.id;
 
@@ -1400,8 +1430,9 @@
             })
           ].join("");
 
+          const currentSlotHour = normalizeHHMM(sl.hora, "19:30");
           const hourOptions = TIME_SLOTS.map((t) => {
-            const selected = sl.hora === t ? "selected" : "";
+            const selected = currentSlotHour === t ? "selected" : "";
             return `<option value="${t}" ${selected}>${t}</option>`;
           }).join("");
 
