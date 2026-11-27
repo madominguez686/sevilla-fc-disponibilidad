@@ -250,6 +250,86 @@
       white-space: nowrap;
     }
 
+    .conv-box {
+      margin-top: 12px;
+      border-radius: 14px;
+      padding: 14px;
+      border: 1.5px solid var(--border);
+      background: #f9fafb;
+    }
+
+    .conv-box.published {
+      border-color: #a7f3d0;
+      background: var(--ok-soft);
+    }
+
+    .conv-box.draft {
+      border-color: #fde68a;
+      background: var(--warn-soft);
+    }
+
+    .conv-box-title {
+      font-size: 13px;
+      font-weight: 800;
+      margin: 0 0 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .conv-details-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .conv-detail-item {
+      background: #fff;
+      border: 1px solid #d1fae5;
+      border-radius: 10px;
+      padding: 8px 10px;
+    }
+
+    .conv-detail-item span {
+      display: block;
+      font-size: 10px;
+      color: var(--muted);
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .conv-detail-item strong {
+      display: block;
+      font-size: 14px;
+      margin-top: 2px;
+      color: var(--text);
+    }
+
+    .visibility-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+      padding: 11px 13px;
+      border-radius: 12px;
+      border: 1.5px solid #d1d5db;
+      background: #f9fafb;
+    }
+
+    .visibility-bar.is-visible {
+      border-color: #6ee7b7;
+      background: var(--ok-soft);
+    }
+
+    .visibility-bar.is-hidden {
+      border-color: #fcd34d;
+      background: var(--warn-soft);
+    }
+
     .choice-group {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -759,6 +839,16 @@
           <span id="empFichaBadge" class="lock-tag">Ficha #—</span>
         </div>
 
+        <div id="empConvocatoriaBox" class="conv-box draft">
+          <div class="conv-box-title">
+            <span id="empConvStatusTitle">Estado de convocatoria</span>
+            <span id="empConvBadge" class="pill-mini pill-pend">En preparación</span>
+          </div>
+          <div id="empConvBody" style="font-size: 13px; color: #374151;">
+            El encargado de zona aún no ha hecho visible la convocatoria de este partido.
+          </div>
+        </div>
+
         <div class="field-gap">
           <label id="empQuestionLabel">¿Estás disponible para el Sevilla FC - Málaga CF?</label>
           <div class="choice-group">
@@ -773,6 +863,7 @@
         </div>
 
         <button class="primary-btn" type="button" onclick="saveMyAvailability()">Guardar mi disponibilidad</button>
+        <button class="secondary-btn" type="button" onclick="refreshEmployeeConvocatoria()">Actualizar estado de convocatoria</button>
         <div id="empMsg" class="status-banner"></div>
       </div>
 
@@ -811,6 +902,22 @@
                 </p>
               </div>
               <span id="encZoneBadge" class="pill-mini">Zona</span>
+            </div>
+
+            <div id="visibilityControlBar" class="visibility-bar is-hidden">
+              <div>
+                <div style="font-size: 12px; font-weight: 800;" id="visibilityTitle">
+                  Convocatoria oculta para los empleados (modo borrador)
+                </div>
+                <div style="font-size: 11px; color: #374151;" id="visibilityDesc">
+                  Puedes ir asignando puestos y horas sin que los empleados lo vean. Al activarla, verán su puesto y hora convocada.
+                </div>
+              </div>
+              <label style="display: inline-flex; align-items: center; gap: 8px; margin: 0; cursor: pointer; font-size: 13px; font-weight: 800;">
+                <input id="convocatoriaVisibleCheckbox" type="checkbox" style="width: 18px; height: 18px; cursor: pointer;"
+                  onchange="toggleConvocatoriaVisibility(this.checked)" />
+                <span id="visibilityToggleLabel">Mostrar a empleados</span>
+              </label>
             </div>
 
             <div id="encMsg" class="status-banner"></div>
@@ -863,7 +970,6 @@
       altoRiesgo: false
     };
 
-    // Coste por hora (€/h) según puesto desempeñado en convocatoria
     const TARIFAS_HORA = {
       camarero: 14.0,
       encargado: 18.0,
@@ -1021,6 +1127,7 @@
     ];
 
     const MARGINS = ["2 horas", "3 horas", "4 horas", "5 horas", "6 horas"];
+    const LOCAL_VISIBILITY_KEY = `sfc_conv_visible_${MATCH_INFO.codigo}`;
 
     let state = {
       confirmado: MATCH_INFO.confirmado,
@@ -1033,7 +1140,8 @@
       availabilities: {},
       pendingCollapsed: false,
       zoneSubView: "montar",
-      postConfigs: {}
+      postConfigs: {},
+      convocatoriaVisible: localStorage.getItem(LOCAL_VISIBILITY_KEY) === "true"
     };
 
     const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -1285,6 +1393,7 @@
         document.getElementById("signSheetZoneLabel").textContent = user.zona;
         document.getElementById("encZoneSubtitle").textContent =
           `Zona ${user.zona} · Orden: Almacén, Bajas, Entreplantas y Altas. Selecciona encargados y camareros por puesto.`;
+        renderVisibilityControl();
         switchZoneView(state.zoneSubView);
       } else {
         document.getElementById("zoneModeTabs").classList.add("hidden");
@@ -1301,27 +1410,36 @@
         return;
       }
 
-      if (!user.id) return;
-      const { data } = await sbClient
+      const { data: matchRows } = await sbClient
         .from("convocatorias")
         .select("*")
-        .eq("partido_id", MATCH_INFO.codigo)
-        .eq("empleado_id", user.id)
-        .maybeSingle();
+        .eq("partido_id", MATCH_INFO.codigo);
 
-      if (data) {
-        state.availabilities[String(user.id)] = {
-          convocatoriaId: data.id,
-          empleadoId: String(user.id),
-          ficha: user.ficha,
-          nombre: user.nombre,
-          zona: user.zona,
-          disponible: Boolean(data.disponible),
-          margen: data.margen_horas || (data.disponible ? "5 horas" : "No disponible"),
-          barraAsignada: data.barra_asignada || "",
-          horaEntrada: normalizeHHMM(data.hora_entrada, "19:30"),
-          puestoRol: normalizeRoleKey(data.puesto_rol || user.rol)
-        };
+      if (Array.isArray(matchRows) && matchRows.length) {
+        const visibleRow = matchRows.find((r) => r.convocatoria_visible !== undefined && r.convocatoria_visible !== null);
+        if (visibleRow !== undefined) {
+          state.convocatoriaVisible = Boolean(visibleRow.convocatoria_visible);
+          localStorage.setItem(LOCAL_VISIBILITY_KEY, String(state.convocatoriaVisible));
+        }
+
+        const mine = user.id
+          ? matchRows.find((r) => String(r.empleado_id) === String(user.id))
+          : null;
+
+        if (mine) {
+          state.availabilities[String(user.id)] = {
+            convocatoriaId: mine.id,
+            empleadoId: String(user.id),
+            ficha: user.ficha,
+            nombre: user.nombre,
+            zona: user.zona,
+            disponible: Boolean(mine.disponible),
+            margen: mine.margen_horas || (mine.disponible ? "5 horas" : "No disponible"),
+            barraAsignada: mine.barra_asignada || "",
+            horaEntrada: normalizeHHMM(mine.hora_entrada, "19:30"),
+            puestoRol: normalizeRoleKey(mine.puesto_rol || user.rol)
+          };
+        }
       }
     }
 
@@ -1362,8 +1480,15 @@
 
       const merged = {};
       const configs = {};
+      let foundVisibilityFlag = false;
+      let anyVisibleInDb = false;
 
       (convs || []).forEach((row) => {
+        if (row.convocatoria_visible !== undefined && row.convocatoria_visible !== null) {
+          foundVisibilityFlag = true;
+          if (Boolean(row.convocatoria_visible)) anyVisibleInDb = true;
+        }
+
         const empIdStr = String(row.empleado_id);
         const empDb = byId.get(empIdStr);
         const ficha = String(empDb?.ficha ?? empIdStr);
@@ -1405,8 +1530,65 @@
         }
       });
 
+      if (foundVisibilityFlag) {
+        state.convocatoriaVisible = anyVisibleInDb;
+        localStorage.setItem(LOCAL_VISIBILITY_KEY, String(state.convocatoriaVisible));
+      }
+
       state.availabilities = merged;
       state.postConfigs = configs;
+    }
+
+    function renderVisibilityControl() {
+      const bar = document.getElementById("visibilityControlBar");
+      const chk = document.getElementById("convocatoriaVisibleCheckbox");
+      const title = document.getElementById("visibilityTitle");
+      const desc = document.getElementById("visibilityDesc");
+      const toggleLabel = document.getElementById("visibilityToggleLabel");
+
+      const visible = Boolean(state.convocatoriaVisible);
+      chk.checked = visible;
+
+      bar.classList.toggle("is-visible", visible);
+      bar.classList.toggle("is-hidden", !visible);
+
+      if (visible) {
+        title.textContent = "Convocatoria VISIBLE para el personal";
+        desc.textContent = "El personal convocado ya puede ver su ubicación/barra asignada, rol y hora de entrada.";
+        toggleLabel.textContent = "Visible para empleados";
+      } else {
+        title.textContent = "Convocatoria OCULTA para el personal (modo borrador)";
+        desc.textContent = "Solo tú ves los puestos asignados mientras terminas de montar. Actívala cuando esté lista.";
+        toggleLabel.textContent = "Mostrar a empleados";
+      }
+    }
+
+    async function toggleConvocatoriaVisibility(isVisible) {
+      state.convocatoriaVisible = Boolean(isVisible);
+      localStorage.setItem(LOCAL_VISIBILITY_KEY, String(state.convocatoriaVisible));
+      renderVisibilityControl();
+
+      const { error } = await sbClient
+        .from("convocatorias")
+        .update({ convocatoria_visible: state.convocatoriaVisible })
+        .eq("partido_id", MATCH_INFO.codigo);
+
+      if (error) {
+        showBanner(
+          "encMsg",
+          `Estado actualizado en esta sesión (${state.convocatoriaVisible ? "VISIBLE" : "OCULTA"}). Nota: añade la columna "convocatoria_visible" en Supabase para persistirlo en todos los dispositivos (${error.message}).`,
+          "warn"
+        );
+        return;
+      }
+
+      showBanner(
+        "encMsg",
+        state.convocatoriaVisible
+          ? "Convocatoria marcada como VISIBLE: el personal ya puede consultar su puesto y hora."
+          : "Convocatoria marcada como OCULTA: los empleados no verán asignaciones hasta que la publiques.",
+        "ok"
+      );
     }
 
     function logoutUser() {
@@ -1423,6 +1605,74 @@
       document.getElementById("loginCard").classList.remove("hidden");
     }
 
+    function renderEmployeeConvocatoriaStatus() {
+      const user = state.currentUser;
+      const box = document.getElementById("empConvocatoriaBox");
+      const titleEl = document.getElementById("empConvStatusTitle");
+      const badgeEl = document.getElementById("empConvBadge");
+      const bodyEl = document.getElementById("empConvBody");
+
+      if (!user) return;
+
+      if (!state.convocatoriaVisible) {
+        box.className = "conv-box draft";
+        titleEl.textContent = "Convocatoria en preparación";
+        badgeEl.className = "pill-mini pill-pend";
+        badgeEl.textContent = "Oculta por encargado";
+        bodyEl.innerHTML =
+          `El encargado de zona está montando la convocatoria para <strong>${MATCH_INFO.partido}</strong>. Cuando la publique, aquí verás tu puesto y hora.`;
+        return;
+      }
+
+      const mine = user.id ? state.availabilities[String(user.id)] : null;
+      box.className = "conv-box published";
+      titleEl.textContent = "Convocatoria publicada";
+      badgeEl.className = "pill-mini pill-ok";
+      badgeEl.textContent = "Visible";
+
+      if (mine && mine.disponible && mine.barraAsignada) {
+        const horaEntrada = normalizeHHMM(mine.horaEntrada, "—");
+        const horaSalida = addHoursToHHMM(MATCH_INFO.horaInicio, 2);
+        const totalHoras = computeShiftHours(horaEntrada, horaSalida);
+        const rolTexto = getRoleDisplayName(normalizeRoleKey(mine.puestoRol));
+
+        bodyEl.innerHTML = `
+          <div style="font-weight: 700; color: #065f46; margin-bottom: 6px;">Has sido convocado para este partido:</div>
+          <div class="conv-details-grid">
+            <div class="conv-detail-item">
+              <span>Ubicación / Puesto</span>
+              <strong>${mine.barraAsignada}</strong>
+            </div>
+            <div class="conv-detail-item">
+              <span>Rol</span>
+              <strong>${rolTexto}</strong>
+            </div>
+            <div class="conv-detail-item">
+              <span>Hora de entrada</span>
+              <strong>${horaEntrada}</strong>
+            </div>
+            <div class="conv-detail-item">
+              <span>Hora salida / Total</span>
+              <strong>${horaSalida} · ${formatHours(totalHoras)}</strong>
+            </div>
+          </div>
+        `;
+      } else if (mine && mine.disponible === false) {
+        bodyEl.innerHTML =
+          `La convocatoria ya está publicada. Registraste tu respuesta como <strong>No disponible</strong> para este partido.`;
+      } else {
+        bodyEl.innerHTML =
+          `La convocatoria ya está publicada. Por el momento no tienes un puesto asignado en esta zona para <strong>${MATCH_INFO.partido}</strong>.`;
+      }
+    }
+
+    async function refreshEmployeeConvocatoria() {
+      if (!state.currentUser) return;
+      await loadExistingAvailabilityForUser(state.currentUser);
+      renderEmployeeConvocatoriaStatus();
+      showBanner("empMsg", "Estado de convocatoria actualizado.", "ok");
+    }
+
     function loadEmployeeFicha(user) {
       document.getElementById("empName").textContent = user.nombre;
       document.getElementById("empZoneRole").textContent = `${user.zona} · Ficha exclusiva para ${user.email}`;
@@ -1433,6 +1683,7 @@
       state.draftAvailable = prev ? prev.disponible : null;
       state.draftMargin = prev && prev.margen && prev.margen !== "No disponible" ? prev.margen : "5 horas";
 
+      renderEmployeeConvocatoriaStatus();
       renderChoiceButtons();
       renderMargins();
     }
@@ -1500,6 +1751,7 @@
         return;
       }
 
+      renderEmployeeConvocatoriaStatus();
       showBanner("empMsg", `Ficha de ${user.nombre} (#${user.ficha}) guardada como ${payload.disponible ? "DISPONIBLE (" + payload.margen + ")" : "NO DISPONIBLE"}.`, "ok");
     }
 
@@ -1936,6 +2188,7 @@
     }
 
     function renderZoneWorkspace() {
+      renderVisibilityControl();
       renderRespondedTable();
       renderPendingSection();
       renderPostsAssembly();
